@@ -121,10 +121,10 @@ fprintf('%d neurons remained with firing rate above %2.2f Hz\n',...
             sum(keep_neurons),firing_thr)
 % Remove low firing rate neurons
 for itrial = 1:length(D)
-    D(itrial).data = D(itrial).data(keep_neurons,:);
+    D(itrial).y = D(itrial).data(keep_neurons,:);
 end
 %Prepare data for the datahigh library
-[D.y] = D.data;
+
 
 %% DataHigh(D,'DimReduce')
 cells           = sum(keep_neurons);
@@ -132,6 +132,7 @@ removeCells     = randperm(cells);
 mask            = false(1,length(D));
 yDim            = size(D(1).data, 1);
 useSqrt         = 1; % square root tranform?    
+show_cv         = false;
 
 %prellocating variables
 test_trials     = [1:4; 5:8; 12:15]; % one left and one right, 3 folds
@@ -170,11 +171,37 @@ for idim = 1 : length(dims)
         traj = rmfield(traj, {'Vsm', 'VsmGP', 'xsm'});
 
         %Validation with LNO
-        cv_gpfa_cell = struct2cell(cosmoother_gpfa_viaOrth_fast...
-                                  (test_data,params,idim));
-        cvdata = cell2mat(cv_gpfa_cell(7,:));
-        mse_fold = sum(sum((cvdata-[test_data.data]).^2));
-
+        cv_gpfa = cosmoother_gpfa_viaOrth_fast...
+                                  (test_data,params,1:idim);
+        cv_gpfa_cell    = struct2cell(cv_gpfa);
+        y_est           = cell2mat(cv_gpfa_cell(6 + idim,:));
+        y_real          = [test_data.data];
+        xx = (y_est - y_real).^2;
+        mse_fold = sum(sum(xx));
+        if show_cv
+           figure( 33 )
+           image(xx)
+           title('Square error (y_{true} - y_{est})^2')
+           xlabel('Concatenated laps')
+           ylabel('Neuron Num.')
+           %show one good and one bad prediction
+           [~, rse]        = sort(sum(xx,2));
+            
+           
+           for j = 1 : ceil(cells/12)
+               figure(30+j)
+               axis tight
+               for i = 1 : 12
+                   subplot(4,3,i)
+                   plot(y_est(rse(i+(j-1)*12),:),'r'),hold on 
+                   plot(y_real(rse(i+(j-1)*12),:),'b')
+                   ylim([min(y_est(rse(i+(j-1)*12),:)) max(y_real(rse(i+(j-1)*12),:))])
+                   plot(repmat((1 : length(test_data) - 1) * traj(1).T, 2, 1), ylim, 'k')
+                   xlim([0, traj(1).T*length(test_data)])
+                   title(sprintf('Cell %d', rse(i+(j-1)*12)))
+               end
+           end
+        end
         mse(idim, ifold) = mse_fold;
         ll_test(idim, ifold) = ll_te;
         ll_train(idim, ifold) = ll_tr;
