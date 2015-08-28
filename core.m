@@ -13,10 +13,10 @@ basepath        = '/media/bigdata/i01_maze08.001/';
 animal          = 'i01_maze08_MS.001';
 basepath        = '/media/bigdata/i01_maze08.004/';
 animal          = 'i01_maze08_MS.004';
-basepath        = '/media/bigdata/i01_maze13.003/';
-animal          = 'i01_maze13_MS.003';
-basepath        = '/media/bigdata/i01_maze15.002/';
-animal          = 'i01_maze15_MS.002';
+% basepath        = '/media/bigdata/i01_maze13.003/';
+% animal          = 'i01_maze13_MS.003';
+% basepath        = '/media/bigdata/i01_maze15.002/';
+% animal          = 'i01_maze15_MS.002';
 
 obj             = load([basepath animal '_BehavElectrData.mat']);
 clusters        = obj.Spike.totclu;
@@ -40,7 +40,7 @@ time_seg        = linspace(0, length(eeg)/Fs, length(eeg));
 
 N               = size(spk_lap,2);
 typetrial       = {'left', 'right', 'errorLeft', 'errorRight'};
-trialcolor      = hot(5);
+trialcolor      = hsv(5);
 % Extract spks when the mouse if running and in the wheel to calculate
 % neural trajectories. 
 
@@ -76,8 +76,9 @@ for lap = 1:numLaps
     trial{lap}          = typetrial{obj.Laps.TrialType(laps(lap))};
     color(lap,:)        = trialcolor(obj.Laps.TrialType(laps(lap)),:);
 end
+%%
 %Only pyramidal cells
-
+disp('Starting spatial segmentation')
 %Segment base on spatial coordinates rather than time.
 %interpolate the position to the longest time
 [leftT, rightT, failed_trial] = protoLap(XT, YT, length_run, trial, X_Run_Lap, ...
@@ -85,15 +86,16 @@ end
 
 %script to extract the grids
 segments     = 40;
-roiDims      = [20 200]; %width and length of ROI
+roiDims      = [20 150]; %width and length of ROI
 connectgrids = 1;
 ctrNeuron    = 0; % neuron to plot just see things are going OK
 show         = 0;
+verbose      = false;
 
 %count spikes inside grids and get normalized firing rate
-[rate, duration] = normFiringRate(XT, YT, X_Run_Lap, Y_Run_Lap, int_at_maze,...
+[rate, time_per_bin, centers] = normFiringRate(XT, YT, X_Run_Lap, Y_Run_Lap, int_at_maze,...
                       segments, show, connectgrids, roiDims, leftT,...
-                      rightT, ctrNeuron, trial);
+                      rightT, ctrNeuron, trial, verbose);
 
 X_pyr = Fs*rate(~isIntern,:,:);
 %% Get data in the format
@@ -104,14 +106,14 @@ bin_width = 30 ; %30mm
 laps_success = 1:numLaps;
 laps_success(failed_trial) = [];
 for ilap = 1 : numel(laps_success)
-    D(ilap).data = X_pyr(:,:,laps_success(ilap));
-    D(ilap).condition = trial{laps_success(ilap)}; 
-    D(ilap).epochColors = color(laps_success(ilap), :);
-    D(ilap).trialId = laps_success(ilap);
+    real_lap = laps_success(ilap);
+    D(ilap).data = X_pyr(:,:,real_lap);
+    D(ilap).condition = trial{real_lap}; 
+    D(ilap).epochColors = color(real_lap, :);
+    D(ilap).trialId = real_lap;
     D(ilap).T = size(D(1).data,2);
+    D(ilap).centers = centers(:,:,real_lap);
 end
-
-dims            = 3:20; % Target latent dimensions
 
 firing_thr      = 0.5; % Minimum norm. firing rate which 
                         % neurons should be kept
@@ -128,179 +130,120 @@ end
 
 %% DataHigh(D,'DimReduce')
 cells           = sum(keep_neurons);
-removeCells     = randperm(cells);
 mask            = false(1,length(D));
 yDim            = size(D(1).data, 1);
 useSqrt         = 1; % square root tranform?    
-show_cv         = false;
+show_cv         = true;
+zDim            = 10;
 
 %prellocating variables
-test_trials     = [1:4; 5:8; 12:15]; % one left and one right, 3 folds
-lat         = []; % Struct for the latent variables
-ll_te       = 0;  % these store the likelihood
-ll_tr       = 0;  % these store the likelihood
-mse_fold    = 0;  % and mse for one fold
-folds       = size(test_trials,1);
-ll_train    = zeros(length(dims),folds); % keeps a running total of likelihood
-ll_test     = zeros(length(dims),folds); % keeps a running total of likelihood
-mse         = zeros(length(dims),folds); % and mse    
-paramsGPFA  = cell(length(dims), folds);
-orth_traje_tr  = cell(length(dims), folds); %training orth_traje
-orth_traje_te  = cell(length(dims), folds); %training orth_traje
+test_trials     = 1:4; % one left and one right, 3 folds
+folds           = size(test_trials,1);
 
-for idim = 1 : length(dims)
-    for ifold = 1 : folds  % three-fold cross-validation        
-        % prepare masks:
-        % test_mask isolates a single fold, train_mask takes the rest
-        test_mask = mask;
-        test_mask(test_trials(ifold, :)) = true;
 
-        train_mask = ~test_mask;
 
-        train_data = D(train_mask);
-        test_data = D(test_mask);
-        %training of the GPFA
-        [params, gpfa_traj, ll_tr] = gpfa_mod(train_data,dims(idim),...
-                                                 'bin_width', bin_width);
+test_mask              = mask;
+test_mask(test_trials) = true;
+train_mask             = ~test_mask;
 
-        %Posterior of test data given the trained model
-        [traj, ll_te] = exactInferenceWithLL(test_data, params,'getLL',1);
-        % orthogonalize the trajectories
-        [Xorth, Corth] = orthogonalize([traj.xsm], params.C);
-        traj = segmentByTrial(traj, Xorth, 'data');
-        traj = rmfield(traj, {'Vsm', 'VsmGP', 'xsm'});
+train_data      = D(train_mask);
+test_data       = D(test_mask);
+%training of the GPFA with already binned data (1 ms)
+[params, gpfa_traj, ll_tr] = gpfa_mod(train_data,zDim,...
+                                         'bin_width', 1);
 
-        %Validation with LNO
-        cv_gpfa = cosmoother_gpfa_viaOrth_fast...
-                                  (test_data,params,1:idim);
-        cv_gpfa_cell    = struct2cell(cv_gpfa);
-        y_est           = cell2mat(cv_gpfa_cell(6 + idim,:));
-        y_real          = [test_data.data];
-        xx = (y_est - y_real).^2;
-        mse_fold = sum(sum(xx));
-        if show_cv
-           figure( 33 )
-           image(xx)
-           title('Square error (y_{true} - y_{est})^2')
-           xlabel('Concatenated laps')
-           ylabel('Neuron Num.')
-           %show one good and one bad prediction
-           [~, rse]        = sort(sum(xx,2));
-            
-           
-           for j = 1 : ceil(cells/12)
-               figure(30+j)
-               axis tight
-               for i = 1 : 12
-                   subplot(4,3,i)
-                   plot(y_est(rse(i+(j-1)*12),:),'r'),hold on 
-                   plot(y_real(rse(i+(j-1)*12),:),'b')
-                   ylim([min(y_est(rse(i+(j-1)*12),:)) max(y_real(rse(i+(j-1)*12),:))])
-                   plot(repmat((1 : length(test_data) - 1) * traj(1).T, 2, 1), ylim, 'k')
-                   xlim([0, traj(1).T*length(test_data)])
-                   title(sprintf('Cell %d', rse(i+(j-1)*12)))
-               end
-           end
-        end
-        mse(idim, ifold) = mse_fold;
-        ll_test(idim, ifold) = ll_te;
-        ll_train(idim, ifold) = ll_tr;
-        paramsGPFA{idim, ifold} = params;
-        orth_traje_tr{idim, ifold} = gpfa_traj;
-        orth_traje_te{idim, ifold} = traj;
-        fprintf('Dimension %d, fold %d', idim, ifold)
-    end        
-end
-% best dimension and best across folds
-[a, foldmax_te] = max(sum(ll_test));
-[a, imax_te] = max(ll_test(:,foldmax_te));
-[a, foldmax_tr] = max(sum(ll_train));
-[a, imax_tr] = max(ll_test(:,foldmax_tr));
+%Posterior of test data given the trained model
+[traj, ll_te]   = exactInferenceWithLL(test_data, params,'getLL',1);
+% orthogonalize the trajectories
+[Xorth, Corth]  = orthogonalize([traj.xsm], params.C);
+traj            = segmentByTrial(traj, Xorth, 'data');
+traj            = rmfield(traj, {'Vsm', 'VsmGP', 'xsm'});
 
-results.ll_test = ll_test;
-results.ll_train = ll_train;
-results.mse = mse;
-results.dim = imax_te;
-results.GPFA = paramsGPFA;
-results.traj_tr = orth_traje_tr;
-results.traj_te = orth_traje_te;
+%Validation with LNO
+cv_gpfa = cosmoother_gpfa_viaOrth_fast(test_data,params,zDim);
+cv_gpfa_cell    = struct2cell(cv_gpfa);
+y_est           = cell2mat(cv_gpfa_cell(8,:));
+y_real          = [test_data.y];
+xx              = (y_est - y_real).^2;
+mse_fold        = sum(sum(xx));
 
-% Setup figure to sumarize results
-close all
-til = sprintf('Spatial binning');
-annotation('textbox', [0 0.9 1 0.1], ...
-    'String', til, ...
-    'EdgeColor', 'none', ...
-    'HorizontalAlignment', 'center',...
-    'Fontsize',18)
-set(gcf,'color', 'w', 'position', [100 100 1400 700])
+if show_cv
+   figure( 33 )
+   image(xx)
+   title('Square error (y_{true} - y_{est})^2')
+   xlabel('Concatenated laps')
+   ylabel('Neuron Num.')
+   %show one good and one bad prediction
+   [~, rse]        = sort(sum(xx,2));
 
-% projection over the three best dimensions (SVD)
-for itrial = 1:length(train_data)
-    p = orth_traje_tr{imax_tr, foldmax_tr}(itrial).data;
-    c = orth_traje_tr{imax_tr, foldmax_tr}(itrial).epochColors;
-    subplot(2,3,[1 2 4 5]), grid on
-    plot(p(1,:), p(2,:), 'Color', c,...
-          'linewidth',2); hold on
-end
-for itrial = 1:length(test_data)
-    p = orth_traje_te{imax_te, foldmax_te}(itrial).data;
-    c = orth_traje_te{imax_te, foldmax_te}(itrial).epochColors;
-    subplot(2,3,[1 2 4 5]), grid on
-    plot(p(1,:), p(2,:), 'Color', 0.5*c,...
-          'linewidth',2); hold on
-end
-xlabel('Eigenvector 1')
-ylabel('Eigenvector 2')
-zlabel('Eigenvector 3')
 
-% MSE
-subplot(2,3,3)
-mean_mse = mean(mse,2);
-plot(mean_mse,'linewidth',2, 'linestyle','-.'), hold on
-plot(mse)
-plot(imax_te, mean_mse(imax_te),'r*', 'markersize',10)
-xlabel('Latent Dimension')
-ylabel('Mean Sqaure Error (LNO)')
-
-% LogLike
-subplot(2,3,6)
-mean_ll_test  = mean(ll_test,2);
-mean_ll_train = mean(ll_train,2);
-offset_te = mean(mean_ll_test);
-offset_tr = mean(mean_ll_train);
-plot(dims,mean_ll_test,'linewidth',2, 'linestyle','-.', 'color','k'), hold on
-plot(dims,mean_ll_train,'linewidth',2, 'linestyle','-.', 'color','b')
-plot(dims,ll_test,'k')
-plot(dims,ll_train,'b')
-plot(imax_te, mean_ll_test(imax_te),'k*', 'markersize',10)
-plot(imax_tr, mean_ll_train(imax_tr),'bs', 'markersize',10)
-xlabel('Latent Dimension')
-ylabel('Log Likelihood')
-title('Train','color','b')
-box off
-namePNG = sprintf('Results/%s_cells',animal);
-print(gcf,[basepath namePNG],'-dpng')
-
-figure(iwin + 1)
-numDim = 7; % 9 latent variables
-til = sprintf('9 Latent Variables');
-annotation('textbox', [0 0.9 1 0.1], ...
-    'String', til, ...
-    'EdgeColor', 'none', ...
-    'HorizontalAlignment', 'center',...
-    'Fontsize',18)
-set(gcf,'color', 'w', 'position', [100 100 1400 700])
-duration = linspace(0, window, T); % from he extraction program
-F    = orth_traje_tr{numDim, foldmax_tr};
-for l= 1:length(F)
-   for v = 1:dims(numDim)
-       subplot(3, 3, v)
-       plot(duration, F(l).data(v, :),'color',F(l).epochColors), hold on       
+   for j = 1 : floor(cells/12)
+       figure(30+j)
+       axis tight
+       for i = 1 : 12
+           subplot(4,3,i)
+           plot(y_est(rse(i+(j-1)*12),:),'r'),hold on 
+           plot(y_real(rse(i+(j-1)*12),:),'b')
+           ylim([min(y_est(rse(i+(j-1)*12),:)) max(y_real(rse(i+(j-1)*12),:))])
+           plot(repmat((1 : length(test_data) - 1) * traj(1).T, 2, 1), ylim, 'k')
+           xlim([0, traj(1).T*length(test_data)])
+           title(sprintf('Cell %d', rse(i+(j-1)*12)))
+       end
    end
 end
-namePNG = sprintf('Results/%s_LV_w%d',animal, window);
-print(gcf,[basepath namePNG],'-dpng')    
 
+%% Plot the LV (gpfa_traj.data) and X-Y position to compute place fields in
+%latent space
+meantraj = zeros(1,2*D(1).T);
+for idx_hdv = 1 : zDim
+    for ilap = 1:length(D) 
+        
+       NoLap = D(ilap).trialId;   
+       traj  = exactInferenceWithLL(D(ilap), params,'getLL',0); 
 
-save([basepath 'Results/' animal '_run_results.mat'],'results')
+       x       = XT(int_at_maze(NoLap,1):int_at_maze(NoLap,2));
+       y       = YT(int_at_maze(NoLap,1):int_at_maze(NoLap,2));   
+       pos     = [x(1:50:end)./1200 y(1:50:end)./1000];
+
+       xDim    = length(pos);
+       pDim    = size(traj.xsm, 1);
+       hidvar  = zeros(xDim, pDim);
+       for i = 1 : pDim
+            hidvar(:, i)  = interp1(traj.xsm(i,:), linspace(0,39,xDim), 'spline');
+       end
+       feat              = [pos, hidvar];
+       corX(:,:, ilap )  = corr(feat);
+        
+       figure(idx_hdv)
+       title(sprintf('Hidden variable %d, animal %s',idx_hdv, animal))
+       hold on, grid on, box on
+       xlabel('Space (mm)')
+       ylabel('Space (mm)')
+       zlabel('Amplitude') 
+       campos([4875.4   -5094.3    22.1])
+       plot(D(ilap).centers(1, :), D(ilap).centers(2, :), 'color', [0.4 0.4 0.4])
+       plot3(D(ilap).centers(1, :), D(ilap).centers(2, :), traj.xsm(idx_hdv,:),...
+             'color',D(ilap).epochColors)
+       if strcmp(trial{D(ilap).trialId}, 'left')  
+          meantraj(1:D(1).T) =  traj.xsm(3,:) + meantraj(1:D(1).T) ;
+       else
+          meantraj(D(1).T + 1: end) =  traj.xsm(idx_hdv,:) + meantraj(D(1).T + 1: end);
+       end   
+    end
+end
+
+figure
+imagesc(mean(corX,3))
+%% Check covarince kernel
+
+Tdif         = repmat((1:D(1).T)', 1, D(1).T) - repmat(1:D(1).T, D(1).T, 1);
+figure(idx_hdv)
+title(sprintf('GPs covariances, animal %s',animal))
+
+for idx_hdv = 1 : zDim
+    subplot(2,5,idx_hdv)
+    K            = (1 - params.eps(idx_hdv)) * ...
+                    exp(-params.gamma(idx_hdv) / 2 * Tdif.^2) +...
+                    params.eps(idx_hdv) * eye(D(1).T);
+    imagesc(K)
+end
