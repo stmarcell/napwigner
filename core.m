@@ -11,8 +11,8 @@ basepath        = '/media/bigdata/i01_maze06.005/';
 animal          = 'i01_maze06_MS.005';
 basepath        = '/media/bigdata/i01_maze08.001/';
 animal          = 'i01_maze08_MS.001';
-basepath        = '/media/bigdata/i01_maze08.004/';
-animal          = 'i01_maze08_MS.004';
+%basepath        = '/media/bigdata/i01_maze08.004/';
+%animal          = 'i01_maze08_MS.004';
 % basepath        = '/media/bigdata/i01_maze13.003/';
 % animal          = 'i01_maze13_MS.003';
 % basepath        = '/media/bigdata/i01_maze15.002/';
@@ -88,7 +88,7 @@ disp('Starting spatial segmentation')
 segments     = 40;
 roiDims      = [20 150]; %width and length of ROI
 connectgrids = 1;
-ctrNeuron    = 0; % neuron to plot just see things are going OK
+ctrNeuron    = 10; % neuron to plot just see things are going OK
 show         = 0;
 verbose      = false;
 
@@ -200,18 +200,23 @@ for idx_hdv = 1 : zDim
         
        NoLap = D(ilap).trialId;   
        traj  = exactInferenceWithLL(D(ilap), params,'getLL',0); 
-
+        
        x       = XT(int_at_maze(NoLap,1):int_at_maze(NoLap,2));
-       y       = YT(int_at_maze(NoLap,1):int_at_maze(NoLap,2));   
+       y       = YT(int_at_maze(NoLap,1):int_at_maze(NoLap,2));
+       spe     = speed(int_at_maze(NoLap,1):int_at_maze(NoLap,2));
+       spe     = spe(1:50:end);
        pos     = [x(1:50:end)./1200 y(1:50:end)./1000];
-
+        
+       spe_int = interp1(spe, linspace(0, length(spe), 40), 'spline');
+       
+       
        xDim    = length(pos);
        pDim    = size(traj.xsm, 1);
        hidvar  = zeros(xDim, pDim);
        for i = 1 : pDim
             hidvar(:, i)  = interp1(traj.xsm(i,:), linspace(0,39,xDim), 'spline');
        end
-       feat              = [pos, hidvar];
+       feat              = [pos, spe, hidvar];
        corX(:,:, ilap )  = corr(feat);
         
        figure(idx_hdv)
@@ -224,6 +229,8 @@ for idx_hdv = 1 : zDim
        plot(D(ilap).centers(1, :), D(ilap).centers(2, :), 'color', [0.4 0.4 0.4])
        plot3(D(ilap).centers(1, :), D(ilap).centers(2, :), traj.xsm(idx_hdv,:),...
              'color',D(ilap).epochColors)
+       plot3(D(ilap).centers(1, :), D(ilap).centers(2, :), spe_int./max(spe_int),...
+             'color',[0.3 0.8 0.3])
        if strcmp(trial{D(ilap).trialId}, 'left')  
           meantraj(1:D(1).T) =  traj.xsm(3,:) + meantraj(1:D(1).T) ;
        else
