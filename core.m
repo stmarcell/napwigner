@@ -128,7 +128,7 @@ end
 %Prepare data for the datahigh library
 
 
-%% DataHigh(D,'DimReduce')
+%% 
 cells           = sum(keep_neurons);
 mask            = false(1,length(D));
 yDim            = size(D(1).data, 1);
