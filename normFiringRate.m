@@ -1,44 +1,64 @@
-function [rate, duration] = normFiringRate(XT, YT, X_Run_Lap, Y_Run_Lap, int_at_maze,...
+function [rate, duration, centers] = normFiringRate(XT, YT, X_Run_Lap, Y_Run_Lap, int_at_maze,...
                                segments, show, connectgrids, roiDims,...
-                               leftT, rightT, ctrNeuron, trial)
+                               leftT, rightT, ctrNeuron, trial, verbose)
 %NORMFIRINGRATE Produced a normalized unsmoothed firing rate by couting the
 %               number of spikes on N segments (spatial bins) and
 %               normalized by the time the animal spent in that bin.
 
 [numLaps, N]        = size(X_Run_Lap);
 rate                = zeros(N, segments, numLaps); 
-duration            = zeros(segments, numLaps); 
+duration            = zeros(segments, numLaps);
+centers             = zeros(2, segments, numLaps);
 gridsL              = get_grids(leftT, segments, connectgrids, show, roiDims);
 gridsR              = get_grids(rightT, segments, connectgrids, show, roiDims);
 
 for ilap = 1 : numLaps
-   xt   = XT(int_at_maze(ilap,1):int_at_maze(ilap,2));
-   yt   = YT(int_at_maze(ilap,1):int_at_maze(ilap,2));
+   %postion of the animal per lap 
+   xt          = XT(int_at_maze(ilap,1):int_at_maze(ilap,2));
+   yt          = YT(int_at_maze(ilap,1):int_at_maze(ilap,2));
+   center      = zeros(2, segments);
+
    for icell = 1 : N
+       if verbose; fprintf('Spatial binning Lap %d, cell %d\n', ilap, icell);end
        show = 0;
-       if icell == ctrNeuron; show = 1; figure(ilap), hold on;end
-       
-       x    = X_Run_Lap{ilap,icell};
-       y    = Y_Run_Lap{ilap,icell};
-      
-       if strcmp(trial{ilap}, 'right') || strcmp(trial{ilap}, 'errorLeft')
-           [cnt, d]= countROIspks(x, y, xt, yt, gridsR, show);
-       else
-           [cnt, d] = countROIspks(x, y, xt, yt, gridsL, show); 
+       if icell == ctrNeuron;
+           show = 1; figure(ilap), hold on;
        end
-       %time normalization
-       rate(icell, :, ilap) = cnt./(d);
+       
+       get_Center   = icell == 1;
+       % position of animal at each spike
+       x            = X_Run_Lap{ilap,icell};
+       y            = Y_Run_Lap{ilap,icell};
+       
+       %depeding on the arm of the maze, the respective bins are use to
+       %count the spikes (gridsR, gridsL), centers and duration (c, d) are
+       %only computed for one cell since all are the same during one lap.
+       if strcmp(trial{ilap}, 'right') || strcmp(trial{ilap}, 'errorLeft')
+           [cnt, d, c]= countROIspks(x, y, xt, yt, gridsR, show, get_Center, center);
+       else
+           [cnt, d, c]= countROIspks(x, y, xt, yt, gridsL, show, get_Center, center); 
+       end
+       if get_Center
+           center = c;
+           time_per_bin = d;
+       end
+       
+       %time normalization       
+       rate(icell, :, ilap) = cnt./(time_per_bin);
        if icell == ctrNeuron;
             fprintf('Counting => Lap %d, cell %d, norm. f. rate %3.3f \n'...
                     ,ilap, icell, sum(rate(icell, :, ilap)))
        end
+       
    end
-   duration(:, ilap) = d;
+   %save the mean position of the animal inside the bin    
+   centers (:, :, ilap) = center;
+   duration(:, ilap)    = time_per_bin;
 end
 
 end
 
-function [count, duration]= countROIspks(x, y, xt, yt, grid, show)
+function [count, duration, center]= countROIspks(x, y, xt, yt, grid, show, get_Center, center)
     %COUNTROISPKS Counts the spikes inside a grid partition
     %   
     %   COUNT = countROIspks(x, y, grid, show)
@@ -62,8 +82,11 @@ function [count, duration]= countROIspks(x, y, xt, yt, grid, show)
         ROI = grid(:,:,iroi);
         insideIndex = inpolygon(x,y,ROI(1,:),ROI(2, :));
         %to avoid the indefinite value, add +1 to all the bins
-        duration(iroi) = sum(inpolygon(xt,yt,ROI(1,:),ROI(2, :)))+1;
-        
+        if get_Center
+            insideTrack     = inpolygon(xt,yt,ROI(1,:),ROI(2, :));        
+            center(:, iroi) = [mean(xt(insideTrack)), mean(yt(insideTrack))];
+            duration(iroi)  = sum(insideTrack)+1;
+        end
         %remove counted spikes
         x(insideIndex) = [];
         y(insideIndex) = [];
@@ -74,6 +97,7 @@ function [count, duration]= countROIspks(x, y, xt, yt, grid, show)
             text(centroid(1), centroid(2),num2str(count(iroi)), 'color', 'r')
             plot(ROI(1,:),ROI(2,:), 'r'), hold on
             plot(xt,yt)
+            plot(center(1,iroi), center(2,iroi), '+', 'markersize', 12)
         end   
     end
     if show
@@ -145,7 +169,7 @@ function [centroid, area] = polygonCentroid(varargin)
     centroid = [sx sy] / 6 / area;
 end
 
-function grids = get_grids(X, segments, connect, show, roiDims)
+function [grids, centers] = get_grids(X, segments, connect, show, roiDims)
 %   GETGRIDS creates rectagular segments along a instructive path
 %
 %       GRIDS = get_grids(X, segments, connect, show, roiDims)
@@ -169,6 +193,7 @@ function grids = get_grids(X, segments, connect, show, roiDims)
     
 
     grids    = zeros(2, 5, segments);
+    centers  = zeros(2, segments);
     border_old = 1;
     for ibin = 1 : segments
         border_new = find(diff(accdist <= ibin*bin_mm));
@@ -193,8 +218,9 @@ function grids = get_grids(X, segments, connect, show, roiDims)
         if show 
             plot(ROI(1,:),ROI(2,:), 'r')
         end
-        oldROI = ROI(:,1:2);
-        border_old = border_new;
+        centers(:,ibin) = polygonCentroid(ROI(1,:),ROI(2, :));
+        oldROI          = ROI(:,1:2);
+        border_old      = border_new;
         %count spikes in the grids of the central arm
     end
 end

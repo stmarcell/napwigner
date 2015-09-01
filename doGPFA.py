@@ -146,11 +146,4 @@ def extX(M):
     CKCRi = Rbi - RbiCb.dot(VarX).dot(RbiCb.T)
     EX = KbCb.dot(CKCRi).dot(np.reshape(Y,[]))
 
-def em(M):
-    iter = 0
-    ll_base = np.nan
 
-    while iter <= 2 or (M['ll'][-1] - M['ll'][-2]) / (M['ll'][-1] - ll_base) > M['tol']:
-        iter += 1
-        # perform E step
-        EX, VarX, ll = estX(M)

@@ -1,5 +1,5 @@
-%% Analysis of Buzsaki database i01_maze06_MS.002
-
+%% Analysis of Buzsaki database
+% wth SPWs file \01__hc5_maze06_002\__p111111-0101_SPWs.txt
 
 clc, close all; clear all;
 
@@ -7,16 +7,16 @@ basepath        = '/media/bigdata/i01_maze05.005/';
 animal          = 'i01_maze05_MS.005';
 basepath        = '/media/bigdata/i01_maze06.002/';
 animal          = 'i01_maze06_MS.002';
-basepath        = '/media/bigdata/i01_maze06.005/';
-animal          = 'i01_maze06_MS.005';
-basepath        = '/media/bigdata/i01_maze08.001/';
-animal          = 'i01_maze08_MS.001';
-%basepath        = '/media/bigdata/i01_maze08.004/';
-%animal          = 'i01_maze08_MS.004';
-% basepath        = '/media/bigdata/i01_maze13.003/';
-% animal          = 'i01_maze13_MS.003';
-% basepath        = '/media/bigdata/i01_maze15.002/';
-% animal          = 'i01_maze15_MS.002';
+% basepath        = '/media/bigdata/i01_maze06.005/';
+% animal          = 'i01_maze06_MS.005';
+% basepath        = '/media/bigdata/i01_maze08.001/';
+% animal          = 'i01_maze08_MS.001';
+% %basepath        = '/media/bigdata/i01_maze08.004/';
+% %animal          = 'i01_maze08_MS.004';
+% % basepath        = '/media/bigdata/i01_maze13.003/';
+% % animal          = 'i01_maze13_MS.003';
+% % basepath        = '/media/bigdata/i01_maze15.002/';
+% % animal          = 'i01_maze15_MS.002';
 
 obj             = load([basepath animal '_BehavElectrData.mat']);
 clusters        = obj.Spike.totclu;
@@ -88,7 +88,7 @@ disp('Starting spatial segmentation')
 segments     = 40;
 roiDims      = [20 150]; %width and length of ROI
 connectgrids = 1;
-ctrNeuron    = 10; % neuron to plot just see things are going OK
+ctrNeuron    = 0; % neuron to plot just see things are going OK
 show         = 0;
 verbose      = false;
 
@@ -98,7 +98,7 @@ verbose      = false;
                       rightT, ctrNeuron, trial, verbose);
 
 X_pyr = Fs*rate(~isIntern,:,:);
-%% Get data in the format
+% Get data in the format
 % Command based GPFA based on DataHigh Library
 %
 bin_width = 30 ; %30mm
@@ -254,3 +254,32 @@ for idx_hdv = 1 : zDim
                     params.eps(idx_hdv) * eye(D(1).T);
     imagesc(K)
 end
+
+%% SPWs
+close all, clear *spw
+SPWs        = load([basepath, '__p111111-0101_SPWs.txt']);
+spw_cnt     = 1;
+for ispw = 1:2:length(SPWs)-1 
+    figure, hold on
+    spw_start    = SPWs( ispw );
+    spw_end      = SPWs( ispw + 1 );
+    len_spw(spw_cnt)      = (spw_end - spw_start)/1000;
+    space        = 0;
+    cnt_n        = 1;
+    for neu=1:N
+        if ~isIntern(neu)
+            idx = spk{neu}>=spw_start & spk{neu}<=spw_end;
+            Spk_spw{spw_cnt,neu} = spk{neu}(idx) - spw_start;
+
+            plot(Spk_spw{spw_cnt,neu},space*ones(1,length(Spk_spw{spw_cnt,neu})),'.')
+            space     = space + 10;
+            cnt_n     = cnt_n + 1;
+        end
+    end
+    spw_cnt     = spw_cnt + 1;
+    
+end
+
+%show the SPWs
+
+

@@ -105,7 +105,7 @@ def sample(path, cells, verbose=False):
 
 
 if __name__ == '__main__':
-    show = False
+    show = True
     p_fields, ax, ay, centers = setup(500)
     # Show place fields distribution
 
@@ -128,7 +128,7 @@ if __name__ == '__main__':
         plt.plot(path_right[:, 0], path_right[:, 1], linewidth=3.0, color='k')
 
     # Stereotypical path taken from a real animal
-    # TODO: below spaghetti must be coded
+    # TODO: Create trajectories with different speeds and x, y position by modelling the motion of the rat.
     spikesleft = sample(path_left, cells)
     spikesright = sample(path_right, cells)
 
