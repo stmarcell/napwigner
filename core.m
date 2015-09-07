@@ -7,12 +7,12 @@ basepath        = '/media/bigdata/i01_maze05.005/';
 animal          = 'i01_maze05_MS.005';
 basepath        = '/media/bigdata/i01_maze06.002/';
 animal          = 'i01_maze06_MS.002';
-% basepath        = '/media/bigdata/i01_maze06.005/';
-% animal          = 'i01_maze06_MS.005';
-% basepath        = '/media/bigdata/i01_maze08.001/';
-% animal          = 'i01_maze08_MS.001';
-% %basepath        = '/media/bigdata/i01_maze08.004/';
-% %animal          = 'i01_maze08_MS.004';
+basepath        = '/media/bigdata/i01_maze06.005/';
+animal          = 'i01_maze06_MS.005';
+basepath        = '/media/bigdata/i01_maze08.001/';
+animal          = 'i01_maze08_MS.001';
+basepath        = '/media/bigdata/i01_maze08.004/';
+animal          = 'i01_maze08_MS.004';
 % % basepath        = '/media/bigdata/i01_maze13.003/';
 % % animal          = 'i01_maze13_MS.003';
 % % basepath        = '/media/bigdata/i01_maze15.002/';
@@ -137,10 +137,8 @@ show_cv         = true;
 zDim            = 10;
 
 %prellocating variables
-test_trials     = 1:4; % one left and one right, 3 folds
+test_trials     = 1:6; % one left and one right, 3 folds
 folds           = size(test_trials,1);
-
-
 
 test_mask              = mask;
 test_mask(test_trials) = true;
@@ -149,11 +147,11 @@ train_mask             = ~test_mask;
 train_data      = D(train_mask);
 test_data       = D(test_mask);
 %training of the GPFA with already binned data (1 ms)
-[params, gpfa_traj, ll_tr] = gpfa_mod(train_data,zDim,...
+[params, gpfa_traj] = gpfa_mod(train_data,zDim,...
                                          'bin_width', 1);
 
 %Posterior of test data given the trained model
-[traj, ll_te]   = exactInferenceWithLL(test_data, params,'getLL',1);
+[traj, ll]   = exactInferenceWithLL(test_data, params,'getLL',1);
 % orthogonalize the trajectories
 [Xorth, Corth]  = orthogonalize([traj.xsm], params.C);
 traj            = segmentByTrial(traj, Xorth, 'data');

@@ -189,7 +189,7 @@ function [grids, centers] = get_grids(X, segments, connect, show, roiDims)
     accdist  = cumsum(sqrt(deltaX.^2 + deltaY.^2));
     accdist  = accdist - accdist(1);
     bin_mm   = accdist(end)/(segments+1);
-       
+    fprintf('Distance traveled by the animal %3.3f mm\n', accdist(end))   
     
 
     grids    = zeros(2, 5, segments);

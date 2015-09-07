@@ -1,6 +1,6 @@
 function save4attila(data, name, str_format)
 
-[f c]=size(data);
+[f, c]=size(data);
 if c>f; data=data'; c=f; end;
 
 if ~isempty(str_format) %text file tab separated
