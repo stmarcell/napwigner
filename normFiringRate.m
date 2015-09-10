@@ -9,8 +9,8 @@ function [rate, duration, centers] = normFiringRate(XT, YT, X_Run_Lap, Y_Run_Lap
 rate                = zeros(N, segments, numLaps); 
 duration            = zeros(segments, numLaps);
 centers             = zeros(2, segments, numLaps);
-gridsL              = get_grids(leftT, segments, connectgrids, show, roiDims);
-gridsR              = get_grids(rightT, segments, connectgrids, show, roiDims);
+gridsL              = get_grids(leftT, segments, connectgrids, 1, roiDims);
+gridsR              = get_grids(rightT, segments, connectgrids, 1, roiDims);
 
 for ilap = 1 : numLaps
    %postion of the animal per lap 
@@ -96,8 +96,8 @@ function [count, duration, center]= countROIspks(x, y, xt, yt, grid, show, get_C
             centroid = polygonCentroid(ROI(1,:),ROI(2, :));
             text(centroid(1), centroid(2),num2str(count(iroi)), 'color', 'r')
             plot(ROI(1,:),ROI(2,:), 'r'), hold on
-            plot(xt,yt)
-            plot(center(1,iroi), center(2,iroi), '+', 'markersize', 12)
+            %plot(xt,yt)
+            %plot(center(1,iroi), center(2,iroi), '+', 'markersize', 12)
         end   
     end
     if show
@@ -197,7 +197,7 @@ function [grids, centers] = get_grids(X, segments, connect, show, roiDims)
     border_old = 1;
     for ibin = 1 : segments
         border_new = find(diff(accdist <= ibin*bin_mm));
-        plot(X([border_old, border_new],1),X([border_old, border_new],2),'o-'), hold on
+        plot(X([border_old, border_new],1),X([border_old, border_new],2),'k'), hold on
         
         deltaXX = X(border_new,1) - X(border_old,1);
         deltaYY = X(border_new,2) - X(border_old,2);

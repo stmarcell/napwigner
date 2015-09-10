@@ -27,22 +27,19 @@ for ilap = 1 : numLaps
     else
         failed_trial =[failed_trial ilap]; %#ok<AGROW>
     end
-    plot(x, y), hold on
-    for icell = 1 : N
-        if ~isIntern(icell)
-            plot(X_Run_Lap{ilap,icell}, Y_Run_Lap{ilap,icell},'x')
-        end
-    end
+    
+    %plot(x, y,'color',[0.8, 0.8, 0.8]), hold on
+
 
 end
 win= 10;
 leftT= [medfilt1(xl,win); medfilt1(yl,win)]'./l;
 rightT= [medfilt1(xr,win); medfilt1(yr,win)]'./r;
 
-plot(leftT(:,1), leftT(:,2),'k','linewidth', 2), hold on
-plot(rightT(:,1), rightT(:,2),'k','linewidth', 2), 
-title(sprintf('Animal %s',animal))
-xlabel('x')
+% plot(leftT(:,1), leftT(:,2),'k','linewidth', 2), hold on
+% plot(rightT(:,1), rightT(:,2),'k','linewidth', 2), 
+% title(sprintf('Animal %s',animal))
+% xlabel('x')
 
 end
 

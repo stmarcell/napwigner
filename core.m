@@ -13,8 +13,8 @@ basepath        = '/media/bigdata/i01_maze08.001/';
 animal          = 'i01_maze08_MS.001';
 basepath        = '/media/bigdata/i01_maze08.004/';
 animal          = 'i01_maze08_MS.004';
-% % basepath        = '/media/bigdata/i01_maze13.003/';
-% % animal          = 'i01_maze13_MS.003';
+basepath        = '/media/bigdata/i01_maze13.003/';
+animal          = 'i01_maze13_MS.003';
 % % basepath        = '/media/bigdata/i01_maze15.002/';
 % % animal          = 'i01_maze15_MS.002';
 
@@ -85,11 +85,11 @@ disp('Starting spatial segmentation')
                                          Y_Run_Lap, int_at_maze, Fs, animal, isIntern);
 
 %script to extract the grids
-segments     = 40;
-roiDims      = [20 150]; %width and length of ROI
+segments     = 60;
+roiDims      = [20 80]; %width and length of ROI
 connectgrids = 1;
-ctrNeuron    = 0; % neuron to plot just see things are going OK
-show         = 0;
+ctrNeuron    = 5; % neuron to plot just see things are going OK
+show         = 1;
 verbose      = false;
 
 %count spikes inside grids and get normalized firing rate
@@ -101,7 +101,6 @@ X_pyr = Fs*rate(~isIntern,:,:);
 % Get data in the format
 % Command based GPFA based on DataHigh Library
 %
-bin_width = 30 ; %30mm
 %remove failed trails
 laps_success = 1:numLaps;
 laps_success(failed_trial) = [];
@@ -126,7 +125,8 @@ for itrial = 1:length(D)
     D(itrial).y = D(itrial).data(keep_neurons,:);
 end
 %Prepare data for the datahigh library
-
+time_bin = mean(time_per_bin(:, laps_success));
+fprintf('average bin time per lap %3.3f\n', time_bin)
 
 %% 
 cells           = sum(keep_neurons);
