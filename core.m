@@ -1,133 +1,135 @@
-%% Analysis of Buzsaki database
-% wth SPWs file \01__hc5_maze06_002\__p111111-0101_SPWs.txt
+%% Analysis of Buzsaki database with GPFA
 
 clc, close all; clear all;
 
-basepath        = '/media/bigdata/i01_maze05.005/';
-animal          = 'i01_maze05_MS.005';
-basepath        = '/media/bigdata/i01_maze06.002/';
-animal          = 'i01_maze06_MS.002';
-basepath        = '/media/bigdata/i01_maze06.005/';
-animal          = 'i01_maze06_MS.005';
-basepath        = '/media/bigdata/i01_maze08.001/';
-animal          = 'i01_maze08_MS.001';
-basepath        = '/media/bigdata/i01_maze08.004/';
-animal          = 'i01_maze08_MS.004';
-basepath        = '/media/bigdata/i01_maze13.003/';
-animal          = 'i01_maze13_MS.003';
+basepath        = '/media/bigdata/';
+[files, animals, roots]= get_matFiles(basepath);
 % % basepath        = '/media/bigdata/i01_maze15.002/';
 % % animal          = 'i01_maze15_MS.002';
 
-obj             = load([basepath animal '_BehavElectrData.mat']);
-clusters        = obj.Spike.totclu;
-laps            = obj.Laps.StartLaps(obj.Laps.StartLaps~=0); %@1250 Hz
-%Adding the end of the last lap because Laps only contains the start
-laps(end+1)     = obj.Par.SyncOff;
-mazesect        = obj.Laps.MazeSection;
-wheelspeed      = obj.Laps.WhlSpeedCW;
-XT              = obj.Track.X;
-YT              = obj.Track.Y;
-X               = obj.Spike.X;
-Y               = obj.Spike.Y;
-events          = obj.Par.MazeSectEnterLeft;
-Fs              = obj.Par.SamplingFrequency;
-eeg             = obj.Track.eeg;
-speed           = obj.Track.speed;
-isIntern        = obj.Clu.isIntern;
-numLaps         = numel(laps)-1;
-time_seg        = linspace(0, length(eeg)/Fs, length(eeg));
-[spk, spk_lap, X, Y, X_lap, Y_lap]  = get_spikes(clusters, obj.Spike.res, laps, X, Y);
-
-N               = size(spk_lap,2);
-typetrial       = {'left', 'right', 'errorLeft', 'errorRight'};
-trialcolor      = hsv(5);
-% Extract spks when the mouse if running and in the wheel to calculate
-% neural trajectories. 
-
-for lap = 1:numLaps  
-    %(a) Runing in the wheel. Detected based on the speed of the wheel that
-    %is a better indicator than the EnterSection time stamp
-    idx_lap = laps(lap):laps(lap+1);
-
-    wheelNonZero = find(wheelspeed(idx_lap)~=0) +  laps(lap);
-    if ~isempty(wheelNonZero)
-        length_wheel(lap) = numel(wheelNonZero)/Fs;
-        %last lap does not have wheel
-        for neu=1:N
-            idx = spk_lap{lap,neu}>=wheelNonZero(1)...
-                          & spk_lap{lap,neu}<=wheelNonZero(end);
-            SpkWheel_lap{lap,neu} = spk_lap{lap,neu}(idx);
-        end
-    end
+for rat = 1: length(animals)
+    %=====================================================================%
+    %=============          LOAD DB MAT FILE      ========================%
+    %=====================================================================%
     
-    %(b) Runing in the maze. Extracted based on the
-    %EnterSection time stamp without considering left-right
-    idx_run = [events{lap}(2,1), sum(events{lap}(7:8,1))];
-    int_at_maze(lap, :) = idx_run;    
-    length_run(lap) = (idx_run(2)-idx_run(1))/Fs;
-    %sect 1:enter, 6:exit
-    for neu=1:N
-        idx = spk_lap{lap,neu}>=idx_run(1) & spk_lap{lap,neu}<=idx_run(end);
-        SpkRun_lap{lap,neu} = spk_lap{lap,neu}(idx) - idx_run(1);
-        X_Run_Lap{lap,neu}  = X_lap{lap, neu}(idx);
-        Y_Run_Lap{lap,neu}  = Y_lap{lap, neu}(idx);
+    y_obj             = load(files{rat});
+    y_clusters        = y_obj.Spike.totclu;
+    y_laps            = y_obj.Laps.StartLaps(y_obj.Laps.StartLaps~=0); 
+    y_laps(end+1)     = y_obj.Par.SyncOff;
+    y_wheelspeed      = y_obj.Laps.WhlSpeedCW;
+    y_XT              = y_obj.Track.X;
+    y_YT              = y_obj.Track.Y;
+    y_X               = y_obj.Spike.X;
+    y_Y               = y_obj.Spike.Y;
+    y_events          = y_obj.Par.MazeSectEnterLeft;
+    Fs                = y_obj.Par.SamplingFrequency;
+    y_speed           = y_obj.Track.speed;
+    y_isIntern        = y_obj.Clu.isIntern;
+    num_laps           = numel(y_laps)-1;
+    [y_spk, y_spk_lap, y_X, y_Y, X_lap, Y_lap]  = get_spikes(y_clusters, y_obj.Spike.res, y_laps, y_X, y_Y);
+
+    num_cells         = size(y_spk_lap,2);
+    typetrial         = {'left', 'right', 'errorLeft', 'errorRight'};
+    trialcolor        = hsv(5);
+    %=====================================================================%
+    %====       Extract spks when the mouse is running   =================%
+    %=====================================================================%
+    y_int_maze    = zeros(num_laps, 2);
+    y_len_run     = zeros(num_laps, 1);
+    for lap = 1:num_laps  
+        %Runing in the maze. Extracted based on the
+        %EnterSection time stamp without considering left-right
+        idx_run          = [y_events{lap}(2,1), sum(y_events{lap}(7:8,1))];        
+        y_int_maze(lap, :) = idx_run;    
+        y_len_run(lap) = (idx_run(2)-idx_run(1))/Fs;
+        %sect 1:enter, 6:exit
+        for neu=1:num_cells
+            idx = y_spk_lap{lap,neu}>=idx_run(1) & y_spk_lap{lap,neu}<=idx_run(end);
+            y_x_Lap{lap,neu}  = X_lap{lap, neu}(idx);
+            y_y_Lap{lap,neu}  = Y_lap{lap, neu}(idx);
+        end
+        %Type of trial
+        y_trial{lap}          = typetrial{y_obj.Laps.TrialType(y_laps(lap))};
+        y_color(lap,:)        = trialcolor(y_obj.Laps.TrialType(y_laps(lap)),:);
     end
-    %Type of trial
-    trial{lap}          = typetrial{obj.Laps.TrialType(laps(lap))};
-    color(lap,:)        = trialcolor(obj.Laps.TrialType(laps(lap)),:);
-end
-%%
-%Only pyramidal cells
-disp('Starting spatial segmentation')
-%Segment base on spatial coordinates rather than time.
-%interpolate the position to the longest time
-[leftT, rightT, failed_trial] = protoLap(XT, YT, length_run, trial, X_Run_Lap, ...
-                                         Y_Run_Lap, int_at_maze, Fs, animal, isIntern);
+    clear idx_run idx
+    %=====================================================================%
+    %===============       Spatial Segmentation          =================%
+    %=====================================================================%
+    disp('Starting spatial segmentation')
+    show         = 1;
+    segments     = 60;
+    roiDims      = [segments 100]; %[Num rois, height of the roi]
+    ctrNeuron    = [95 13]; % neuron and Lap to plot just see things are going OK
+    verbose      = false;
 
-%script to extract the grids
-segments     = 60;
-roiDims      = [20 80]; %width and length of ROI
-connectgrids = 1;
-ctrNeuron    = 5; % neuron to plot just see things are going OK
-show         = 1;
-verbose      = false;
+    %Segment base on spatial coordinates.
+    %Find the typical left and right trajectories
+    figure(1)
+    set(gcf, 'position', [100, 100, 900, 700])
+    y_pr = protoLap(y_XT, y_YT, y_len_run,...
+                    y_trial, y_int_maze, Fs, show, roiDims);
+    title(sprintf('Spatial segmentation rat %s, bin %3.3f ms',animals{rat},y_pr.bin_size_le))
+    saveas(gcf,sprintf('%s_segments_(%d).png',roots{rat},segments))
+    close 
+    
+    %count spikes inside grids and get normalized firing rate
+    %(XT, YT, X_Run_Lap, Y_Run_Lap, int_at_maze,gridsR, gridsL, ctrNeuron, trial, verbose)
+    [y_rate, time_bin] = normFiringRate(y_XT, y_YT, y_x_Lap, y_y_Lap, y_int_maze,...
+                           y_pr.rois_ri, y_pr.rois_le,ctrNeuron, y_trial, verbose);
 
-%count spikes inside grids and get normalized firing rate
-[rate, time_per_bin, centers] = normFiringRate(XT, YT, X_Run_Lap, Y_Run_Lap, int_at_maze,...
-                      segments, show, connectgrids, roiDims, leftT,...
-                      rightT, ctrNeuron, trial, verbose);
+    X_pyr = Fs*y_rate(~y_isIntern,:,:);
+    
+    %=====================================================================%
+    %===============       Get data in the format DH     =================%
+    %=====================================================================%
+   
+    % Get data in the format
+    % Command based GPFA based on DataHigh Library
+    %
+    %remove failed trails
+    num_laps_hit = 1:num_laps;
+    num_laps_hit(y_pr.failures) = [];
+    D = struct;
+    for ilap = 1 : numel(num_laps_hit)
+        real_lap = num_laps_hit(ilap);
+        D(ilap).data = X_pyr(:,:,real_lap);
+        D(ilap).condition = y_trial{real_lap}; 
+        D(ilap).epochColors = y_color(real_lap, :);
+        D(ilap).trialId = real_lap;
+        D(ilap).T = size(D(1).data,2);
+        D(ilap).centers_left = y_pr.centers_le;
+        D(ilap).centers_right = y_pr.centers_ri;
+    end
 
-X_pyr = Fs*rate(~isIntern,:,:);
-% Get data in the format
-% Command based GPFA based on DataHigh Library
-%
-%remove failed trails
-laps_success = 1:numLaps;
-laps_success(failed_trial) = [];
-for ilap = 1 : numel(laps_success)
-    real_lap = laps_success(ilap);
-    D(ilap).data = X_pyr(:,:,real_lap);
-    D(ilap).condition = trial{real_lap}; 
-    D(ilap).epochColors = color(real_lap, :);
-    D(ilap).trialId = real_lap;
-    D(ilap).T = size(D(1).data,2);
-    D(ilap).centers = centers(:,:,real_lap);
-end
-
-firing_thr      = 0.5; % Minimum norm. firing rate which 
-                        % neurons should be kept
-m               = mean([D.data],2);
-keep_neurons    = m >= firing_thr;
-fprintf('%d neurons remained with firing rate above %2.2f Hz\n',...
-            sum(keep_neurons),firing_thr)
-% Remove low firing rate neurons
-for itrial = 1:length(D)
-    D(itrial).y = D(itrial).data(keep_neurons,:);
-end
-%Prepare data for the datahigh library
-time_bin = mean(time_per_bin(:, laps_success));
-fprintf('average bin time per lap %3.3f\n', time_bin)
-
+    firing_thr      = 0.5; % Minimum norm. firing rate which 
+                            % neurons should be kept
+    m               = mean([D.data],2);
+    keep_neurons    = m >= firing_thr;
+    fprintf('%d neurons remained with firing rate above %2.2f Hz\n',...
+                sum(keep_neurons),firing_thr)
+    num_cells_pyr = sum(keep_neurons);
+    % Remove low firing rate neurons
+    for itrial = 1:length(D)
+        D(itrial).y = D(itrial).data(keep_neurons,:);
+    end
+    %Prepare data for the datahigh library
+    time_bin_mu = mean(time_bin(:, num_laps_hit));
+    fprintf('average bin time per lap %3.3f\n', time_bin_mu)
+    
+    figure(2)
+    set(gcf,'position',[69,719,1820,311])
+    imagesc([D.y]), hold on
+    plot(repmat([1:numel(num_laps_hit)]*segments,2,1), ylim, 'w')
+    xlabel(sprintf('Segmented %d laps each one in %d bins', numel(num_laps_hit), segments))
+    ylabel('Pyramidal Cells (EC and CA1)')
+    title(sprintf('Spike counts rat %s, bin %3.3f ms',animals{rat},y_pr.bin_size_le))
+    saveas(gcf,sprintf('%s_spikecount_bin_(%d).png',roots{rat},segments))
+    close
+    
+    clear y*
+    
+end 
 %% 
 cells           = sum(keep_neurons);
 mask            = false(1,length(D));
@@ -190,6 +192,8 @@ if show_cv
    end
 end
 
+
+
 %% Plot the LV (gpfa_traj.data) and X-Y position to compute place fields in
 %latent space
 meantraj = zeros(1,2*D(1).T);
@@ -199,9 +203,9 @@ for idx_hdv = 1 : zDim
        NoLap = D(ilap).trialId;   
        traj  = exactInferenceWithLL(D(ilap), params,'getLL',0); 
         
-       x       = XT(int_at_maze(NoLap,1):int_at_maze(NoLap,2));
-       y       = YT(int_at_maze(NoLap,1):int_at_maze(NoLap,2));
-       spe     = speed(int_at_maze(NoLap,1):int_at_maze(NoLap,2));
+       x       = y_XT(y_int_maze(NoLap,1):y_int_maze(NoLap,2));
+       y       = y_YT(y_int_maze(NoLap,1):y_int_maze(NoLap,2));
+       spe     = y_speed(y_int_maze(NoLap,1):y_int_maze(NoLap,2));
        spe     = spe(1:50:end);
        pos     = [x(1:50:end)./1200 y(1:50:end)./1000];
         
@@ -229,7 +233,7 @@ for idx_hdv = 1 : zDim
              'color',D(ilap).epochColors)
        plot3(D(ilap).centers(1, :), D(ilap).centers(2, :), spe_int./max(spe_int),...
              'color',[0.3 0.8 0.3])
-       if strcmp(trial{D(ilap).trialId}, 'left')  
+       if strcmp(y_trial{D(ilap).trialId}, 'left')  
           meantraj(1:D(1).T) =  traj.xsm(3,:) + meantraj(1:D(1).T) ;
        else
           meantraj(D(1).T + 1: end) =  traj.xsm(idx_hdv,:) + meantraj(D(1).T + 1: end);
@@ -264,10 +268,10 @@ for ispw = 1:2:length(SPWs)-1
     len_spw(spw_cnt)      = (spw_end - spw_start)/1000;
     space        = 0;
     cnt_n        = 1;
-    for neu=1:N
-        if ~isIntern(neu)
-            idx = spk{neu}>=spw_start & spk{neu}<=spw_end;
-            Spk_spw{spw_cnt,neu} = spk{neu}(idx) - spw_start;
+    for neu=1:num_cells
+        if ~y_isIntern(neu)
+            idx = y_spk{neu}>=spw_start & y_spk{neu}<=spw_end;
+            Spk_spw{spw_cnt,neu} = y_spk{neu}(idx) - spw_start;
 
             plot(Spk_spw{spw_cnt,neu},space*ones(1,length(Spk_spw{spw_cnt,neu})),'.')
             space     = space + 10;
