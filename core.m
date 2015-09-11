@@ -6,7 +6,7 @@ basepath        = '/media/bigdata/';
 [files, animals, roots]= get_matFiles(basepath);
 % % basepath        = '/media/bigdata/i01_maze15.002/';
 % % animal          = 'i01_maze15_MS.002';
-
+roi_height      = [100, 100, 100, 100, 50, 100];
 for rat = 1: length(animals)
     %=====================================================================%
     %=============          LOAD DB MAT FILE      ========================%
@@ -26,7 +26,7 @@ for rat = 1: length(animals)
     y_speed           = y_obj.Track.speed;
     y_isIntern        = y_obj.Clu.isIntern;
     num_laps           = numel(y_laps)-1;
-    [y_spk, y_spk_lap, y_X, y_Y, X_lap, Y_lap]  = get_spikes(y_clusters, y_obj.Spike.res, y_laps, y_X, y_Y);
+    [y_spk, y_spk_lap, y_X, y_Y, y_X_lap, y_Y_lap]  = get_spikes(y_clusters, y_obj.Spike.res, y_laps, y_X, y_Y);
 
     num_cells         = size(y_spk_lap,2);
     typetrial         = {'left', 'right', 'errorLeft', 'errorRight'};
@@ -45,8 +45,8 @@ for rat = 1: length(animals)
         %sect 1:enter, 6:exit
         for neu=1:num_cells
             idx = y_spk_lap{lap,neu}>=idx_run(1) & y_spk_lap{lap,neu}<=idx_run(end);
-            y_x_Lap{lap,neu}  = X_lap{lap, neu}(idx);
-            y_y_Lap{lap,neu}  = Y_lap{lap, neu}(idx);
+            y_x_Lap{lap,neu}  = y_X_lap{lap, neu}(idx);
+            y_y_Lap{lap,neu}  = y_Y_lap{lap, neu}(idx);
         end
         %Type of trial
         y_trial{lap}          = typetrial{y_obj.Laps.TrialType(y_laps(lap))};
@@ -71,7 +71,6 @@ for rat = 1: length(animals)
                     y_trial, y_int_maze, Fs, show, roiDims);
     title(sprintf('Spatial segmentation rat %s, bin %3.3f ms',animals{rat},y_pr.bin_size_le))
     saveas(gcf,sprintf('%s_segments_(%d).png',roots{rat},segments))
-    close 
     
     %count spikes inside grids and get normalized firing rate
     %(XT, YT, X_Run_Lap, Y_Run_Lap, int_at_maze,gridsR, gridsL, ctrNeuron, trial, verbose)
@@ -125,9 +124,12 @@ for rat = 1: length(animals)
     ylabel('Pyramidal Cells (EC and CA1)')
     title(sprintf('Spike counts rat %s, bin %3.3f ms',animals{rat},y_pr.bin_size_le))
     saveas(gcf,sprintf('%s_spikecount_bin_(%d).png',roots{rat},segments))
-    close
     
-    clear y*
+    
+    clear y* 
+    pause
+    close all
+    
     
 end 
 %% 
