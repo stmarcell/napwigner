@@ -4,10 +4,13 @@ clc, close all; clear all;
 
 basepath        = '/media/bigdata/';
 [files, animals, roots]= get_matFiles(basepath);
-% % basepath        = '/media/bigdata/i01_maze15.002/';
-% % animal          = 'i01_maze15_MS.002';
-roi_height      = [100, 100, 100, 100, 50, 100];
-for rat = 1: length(animals)
+%needed to compensate for the difference in the measurements among mice
+roi_height      = [100, 100, 100, 100, 100, 50, 100];
+
+%create different segmenation sizes
+bin_sizes       = 40:5:85;
+
+for rat = 6: length(animals)
     %=====================================================================%
     %=============          LOAD DB MAT FILE      ========================%
     %=====================================================================%
@@ -58,78 +61,96 @@ for rat = 1: length(animals)
     %=====================================================================%
     disp('Starting spatial segmentation')
     show         = 1;
-    segments     = 60;
-    roiDims      = [segments 100]; %[Num rois, height of the roi]
-    ctrNeuron    = [95 13]; % neuron and Lap to plot just see things are going OK
     verbose      = false;
+    ctrNeuron    = [15 5]; % neuron and Lap to plot just see things are going OK
+    for ibin = 1 : length(bin_sizes)
+        fprintf('bin size : %d', bin_sizes(ibin))
+        
+        segments     = bin_sizes(ibin);
+        roiDims      = [segments roi_height(rat)]; %[Num rois, height of the roi]
+        
 
-    %Segment base on spatial coordinates.
-    %Find the typical left and right trajectories
-    figure(1)
-    set(gcf, 'position', [100, 100, 900, 700])
-    y_pr = protoLap(y_XT, y_YT, y_len_run,...
-                    y_trial, y_int_maze, Fs, show, roiDims);
-    title(sprintf('Spatial segmentation rat %s, bin %3.3f ms',animals{rat},y_pr.bin_size_le))
-    saveas(gcf,sprintf('%s_segments_(%d).png',roots{rat},segments))
-    
-    %count spikes inside grids and get normalized firing rate
-    %(XT, YT, X_Run_Lap, Y_Run_Lap, int_at_maze,gridsR, gridsL, ctrNeuron, trial, verbose)
-    [y_rate, time_bin] = normFiringRate(y_XT, y_YT, y_x_Lap, y_y_Lap, y_int_maze,...
-                           y_pr.rois_ri, y_pr.rois_le,ctrNeuron, y_trial, verbose);
+        %Segment base on spatial coordinates.
+        %Find the typical left and right trajectories
+        figure(1)
+        set(gcf, 'position', [100, 100, 900, 700])
+        q_pr = protoLap(y_XT, y_YT, y_len_run,...
+                        y_trial, y_int_maze, Fs, show, roiDims);
+        title(sprintf('Spatial segmentation rat %s, bin %3.3f ms',animals{rat},q_pr.bin_size_le))
+        set(gcf, 'PaperUnits', 'centimeters');
+        set(gcf, 'PaperPosition', [0 0 18 11]);
+        %rat #6 has different spatial scales
+        if rat ~= 6
+           axis([-100, 1000, 0, 1100])
+        end
+        saveas(gcf,sprintf('%s_segments_(%d).png',roots{rat},segments))
 
-    X_pyr = Fs*y_rate(~y_isIntern,:,:);
-    
-    %=====================================================================%
-    %===============       Get data in the format DH     =================%
-    %=====================================================================%
-   
-    % Get data in the format
-    % Command based GPFA based on DataHigh Library
-    %
-    %remove failed trails
-    num_laps_hit = 1:num_laps;
-    num_laps_hit(y_pr.failures) = [];
-    D = struct;
-    for ilap = 1 : numel(num_laps_hit)
-        real_lap = num_laps_hit(ilap);
-        D(ilap).data = X_pyr(:,:,real_lap);
-        D(ilap).condition = y_trial{real_lap}; 
-        D(ilap).epochColors = y_color(real_lap, :);
-        D(ilap).trialId = real_lap;
-        D(ilap).T = size(D(1).data,2);
-        D(ilap).centers_left = y_pr.centers_le;
-        D(ilap).centers_right = y_pr.centers_ri;
-    end
+        %count spikes inside grids and get normalized firing rate
+        %(XT, YT, X_Run_Lap, Y_Run_Lap, int_at_maze,gridsR, gridsL, ctrNeuron, trial, verbose)
+        [q_rate, q_time_bin] = normFiringRate(y_XT, y_YT, y_x_Lap, y_y_Lap, y_int_maze,...
+                               q_pr.rois_ri, q_pr.rois_le,ctrNeuron, y_trial, verbose);
 
-    firing_thr      = 0.5; % Minimum norm. firing rate which 
-                            % neurons should be kept
-    m               = mean([D.data],2);
-    keep_neurons    = m >= firing_thr;
-    fprintf('%d neurons remained with firing rate above %2.2f Hz\n',...
-                sum(keep_neurons),firing_thr)
-    num_cells_pyr = sum(keep_neurons);
-    % Remove low firing rate neurons
-    for itrial = 1:length(D)
-        D(itrial).y = D(itrial).data(keep_neurons,:);
-    end
-    %Prepare data for the datahigh library
-    time_bin_mu = mean(time_bin(:, num_laps_hit));
-    fprintf('average bin time per lap %3.3f\n', time_bin_mu)
-    
-    figure(2)
-    set(gcf,'position',[69,719,1820,311])
-    imagesc([D.y]), hold on
-    plot(repmat([1:numel(num_laps_hit)]*segments,2,1), ylim, 'w')
-    xlabel(sprintf('Segmented %d laps each one in %d bins', numel(num_laps_hit), segments))
-    ylabel('Pyramidal Cells (EC and CA1)')
-    title(sprintf('Spike counts rat %s, bin %3.3f ms',animals{rat},y_pr.bin_size_le))
-    saveas(gcf,sprintf('%s_spikecount_bin_(%d).png',roots{rat},segments))
-    
-    
-    clear y* 
-    pause
-    close all
-    
+        X_pyr = Fs*q_rate(~y_isIntern,:,:);
+
+        %=====================================================================%
+        %===============       Get data in the format DH     =================%
+        %=====================================================================%
+
+        % Get data in the format
+        % Command based GPFA based on DataHigh Library
+        %
+        %remove failed trails
+        num_laps_hit = 1:num_laps;
+        num_laps_hit(q_pr.failures) = [];
+        D = struct;
+        for ilap = 1 : numel(num_laps_hit)
+            real_lap = num_laps_hit(ilap);
+            D(ilap).data = X_pyr(:,:,real_lap);
+            D(ilap).condition = y_trial{real_lap}; 
+            D(ilap).epochColors = y_color(real_lap, :);
+            D(ilap).trialId = real_lap;
+            D(ilap).T = size(D(1).data,2);
+            D(ilap).centers_left = q_pr.centers_le;
+            D(ilap).centers_right = q_pr.centers_ri;
+            D(ilap).bin_size = segments;
+            D(ilap).timebin = q_time_bin(ilap, :);
+            
+        end
+
+        firing_thr      = 0.5; % Minimum norm. firing rate which 
+                                % neurons should be kept
+        m               = mean([D.data],2);
+        keep_neurons    = m >= firing_thr;
+        fprintf('%d neurons remained with firing rate above %2.2f Hz\n',...
+                    sum(keep_neurons),firing_thr)
+        num_cells_pyr = sum(keep_neurons);
+        % Remove low firing rate neurons
+        for itrial = 1:length(D)
+            q_spikes    = D(itrial).data(keep_neurons,:);
+            D(itrial).y = q_spikes;
+            D(itrial).sparsness = sum(sum(q_spikes == 0))/numel(q_spikes);
+        end
+        %Prepare data for the datahigh library
+        %q_time_bin_mu = mean(q_time_bin(:, num_laps_hit));
+        %fprintf('average bin time per lap %3.3f\n', q_time_bin_mu)
+
+        figure(2)
+        set(gcf,'position',[69,719,1820,311])
+        imagesc([D.y]), hold on
+        plot(repmat([1:numel(num_laps_hit)]*segments,2,1), ylim, 'w')
+        xlabel(sprintf('Segmented %d laps each one in %d bins', numel(num_laps_hit), segments))
+        ylabel('Pyramidal Cells (EC and CA1)')
+        title(sprintf('Spike counts rat %s, bin %3.3f ms',animals{rat},q_pr.bin_size_le))
+        set(gcf, 'PaperUnits', 'centimeters');
+        set(gcf, 'PaperPosition', [0 0 25 10]);
+        saveas(gcf,sprintf('%s_spikecount_bin_(%d).png',roots{rat},segments))
+        
+        save(sprintf('%s_spikecount_bin_(%d).mat',roots{rat},segments), 'D');
+         
+        close all
+        clear q*
+    end    
+    clear y*
     
 end 
 %% 
