@@ -12,6 +12,7 @@ r       = 0;l = 0;
 max_duration = mean(length_run) + std(length_run); %to remove trials that are far from the mean
 
 failed_trial = [];
+position_lap = {};
 for ilap = 1 : numLaps
     duration    = linspace(0,length_run(ilap),longest); 
     %real animal position and interporaltion
@@ -34,10 +35,10 @@ for ilap = 1 : numLaps
        color = [0.1 0.1 0.1];
        fprintf('Lap %d far from the average motion. Removed\n', ilap)
     end
-    if show
+    if show        
         plot(x, y,'color',color), hold on
     end
-
+    position_lap{ilap} = [x, y];
 end
 win= 10;
 leftT= [medfilt1(xl,win); medfilt1(yl,win)]'./l;
@@ -61,6 +62,7 @@ proto_out.centers_le =  centersL;
 proto_out.centers_ri =  centersR;
 proto_out.bin_size_le =  bin_mmL;
 proto_out.bin_size_ri =  bin_mmR;
+proto_out.position = position_lap;
 
 end
 
