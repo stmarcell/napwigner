@@ -1,4 +1,4 @@
-function [gpfa_params, gpfa_traj, LL] = gpfa_mod(D,dims,varargin)
+function [gpfa_params, gpfa_traj, LL_t, LL, diffC] = gpfa_mod(D,dims,varargin)
 % GPFA_ENGINEDH A modified GPFA_ENGINE for the DataHigh program
 %
 %  Inputs:
@@ -68,7 +68,7 @@ currentParams = startParams;
   % =====================
 
 
-  [gpfa_params, D, LL] =... 
+  [gpfa_params, D, LL_t,iterTime] =... 
     myem_mod(currentParams, D,'emMaxIters',emMaxIters);
       
   if(nargout > 1)
@@ -83,6 +83,8 @@ currentParams = startParams;
     gpfa_traj = segmentByTrial(gpfa_traj, Xorth, 'data');
     gpfa_traj = rmfield(gpfa_traj, {'Vsm', 'VsmGP', 'xsm'});
     gpfa_params.Corth = Corth;
+    
+    diffC = currentParams.C - gpfa_params.C;
   end
   
 

@@ -32,28 +32,32 @@ function percent = parfor_progress(N, caller)
 %   See also PARFOR.
 
 % By Jeremy Scheff - jdscheff@gmail.com - http://www.jeremyscheff.com/
+%Modified by Ruben Pinzon
 
 error(nargchk(0, 2, nargin, 'struct'));
 
 if nargin < 2
-    N = -1;
-    caller = '';
+    caller = 'Processing';
 end
 
 percent = 0;
 w = 50; % Width of progress bar
 
 if N > 0
+    
     f = fopen('parfor_progress.txt', 'w');
     if f<0
         error('Do you have write permissions for %s?', pwd);
     end
-    fprintf(f, '%d\n', N); % Save N at the top of progress.txt
+    txt = [caller ' :  0%[>', repmat(' ', 1, w), ']'];
+    L = numel(txt); %save the lenght of the text
+    if nargout == 0
+        disp(txt);
+    end
+    
+    fprintf(f, '%d\t%d\n', N, L); % Save N at the top of progress.txt
     fclose(f);
     
-    if nargout == 0
-        disp(['  0%[>', repmat(' ', 1, w), ']']);
-    end
 elseif N == 0
     delete('parfor_progress.txt');
     percent = 100;
@@ -65,21 +69,27 @@ else
     if ~exist('parfor_progress.txt', 'file')
         error('parfor_progress.txt not found. Run PARFOR_PROGRESS(N) before PARFOR_PROGRESS to initialize parfor_progress.txt.');
     end
+    if nargin < 2
+        caller = 'Processing';
+    end
     
     f = fopen('parfor_progress.txt', 'a');
     fprintf(f, '1\n');
     fclose(f);
     
     f = fopen('parfor_progress.txt', 'r');
-    progress = fscanf(f, '%d');
+    data = fscanf(f, '%d %d', [2 inf]);
     fclose(f);
-    percent = (length(progress)-1)/progress(1)*100;
+    
+    progress    = data(:,2:end);
+    percent     = sum(progress(:))/data(1)*100;
+    L           = data(2);
     
     if nargout == 0
-        name    = [caller ': '];
-        perc = sprintf('%3.0f%%', percent); % 4 characters wide, percentage
-        disp([repmat(char(8), 1, (w+9+length(name))), char(10), perc,...
-            '[', repmat('=', 1, round(percent*w/100)), '>',...
-            repmat(' ', 1, w - round(percent*w/100)), ']']);
+        head    = sprintf('%s :%3.0f%%',caller(1:10), percent); % 4 characters wide, percentage
+        prog    = sprintf('[%s>%s]',repmat('=', 1, round(percent*w/100)), repmat(' ', 1, w - round(percent*w/100)));
+        txt     = [head prog]; 
+        
+        disp([repmat(char(8), 1, L+2),txt]);
     end
 end

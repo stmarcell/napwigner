@@ -14,7 +14,7 @@ roi_height      = [100, 100, 100, 100, 100, 50, 100];
 %create different segmenation sizes
 bin_sizes       = 40:5:85;
 
-for rat = 1: length(animals)
+for rat = 1: 1%length(animals)
     %=====================================================================%
     %=============          LOAD DB MAT FILE      ========================%
     %=====================================================================%
@@ -159,6 +159,7 @@ for rat = 1: length(animals)
         close all
         clear q*
     end    
+    
     clear y*
     
 end 
@@ -171,11 +172,13 @@ clc, close all; clear all;
 cd /media/LENOVO/HAS/CODE/Wigner-Pattern
 
 basepath                = '/media/bigdata/';
-[files, animals, roots] = get_matFiles(basepath, '/*).mat');
+[files, animals, roots] = get_matFiles(basepath, '/*count*');
 useSqrt                 = 1; % square root tranform?    
-zDim                    = [2:2:20]; %hidden space dimensions
+zDim                    = [2:2:30]; %hidden space dimensions
 rat_curr                = '';
-for irat = 35 : length(files)
+num_dims                = numel(zDim);
+
+for irat = 1 : 20 %length(files)
     
    y_obj            = load(files{irat});
    D                = y_obj.D; 
@@ -201,13 +204,15 @@ for irat = 35 : length(files)
    %======================================================================%
    %================       Training Validation           =================%
    %======================================================================%
-   post_ll = zeros(length(zDim), length(cv_fold_idx)-1 );
-   mse_fold = zeros(length(zDim), length(cv_fold_idx)-1 );
-   model = {};
-   for idim = 1 : length(zDim)
+   like         = zeros(1, length(cv_fold_idx)-1 );
+   mse          = zeros(1, length(cv_fold_idx)-1 );
+   model        = {};
+   parfor_progress(num_dims*num_folds)
+   for idim = 1 : num_dims
        tic
         for ifold = 1 : num_folds         
-            fprintf('fold %d', ifold)
+            parfor_progress(-1,sprintf('Bin %d,q=%d ',D(1).T, zDim(idim)));
+            
             gp_test_mask = cv_mask;
             gp_test_mask(cv_trials(cv_fold_idx(ifold):...
                              cv_fold_idx(ifold+1)-1)) = true;
@@ -221,49 +226,45 @@ for irat = 35 : length(files)
             %Posterior of test data given the trained model
             [gp_traj, gp_ll]   = exactInferenceWithLL(gp_test_data, gp_params,'getLL',1);
             
-            post_ll(idim, ifold) = gp_ll;
+            like_fold = gp_ll;
             % orthogonalize the trajectories
 
             [gp_Xorth, gp_Corth]     = orthogonalize([gp_traj.xsm], gp_params.C);
-            gp_traj            = segmentByTrial(gp_traj, gp_Xorth, 'data');
-            gp_traj            = rmfield(gp_traj, {'Vsm', 'VsmGP', 'xsm'});
+            gp_traj                  = segmentByTrial(gp_traj, gp_Xorth, 'data');
 
             %Validation with LNO
             cv_gpfa = cosmoother_gpfa_viaOrth_fast(gp_test_data,gp_params,zDim(idim));
             cv_gpfa_cell       = struct2cell(cv_gpfa);
-            gp_y_est           = cell2mat(cv_gpfa_cell(end,:));
+            cvdata           = cell2mat(cv_gpfa_cell(end,:));
             gp_y_real          = [gp_test_data.y];
-            gp_xx              = (gp_y_est - gp_y_real).^2;
+            gp_xx              = (cvdata - gp_y_real).^2;
             
-            mse_fold(idim, ifold) = sum(sum(gp_xx));
+            mse_fold           = sum(sum(gp_xx));
+           % add up the likelihood and LNO errors across folds
+            mse(idim)          = mse(idim) + mse_fold;
+            like(idim)         = like(idim) + like_fold; 
             
-            
-            model{idim, ifold}.GPparams = gp_params;
-            model{idim, ifold}.GPtrajec = gpfa_traj;
-            model{idim, ifold}.y_est    = gp_y_est;
-            model{idim, ifold}.error    = gp_xx;
-            model{idim, ifold}.training = gp_train_mask;
-            model{idim, ifold}.test     = gp_test_mask;
+            model{idim, ifold}.GPparams = gp_params;         
             
             clear gp* 
         end
-        fprintf('Rat %s (%d/%d),zDim %d,loglike %5.2f, mse %5.2f, done in %3.2fs\n',...
-                     animals{irat},irat, length(files), zDim(idim),mean(post_ll(idim, :)),mean(mse_fold(idim, :)), toc)
+        
    end
+   parfor_progress(0)
    
-   R.gpfa = model;
-   R.resultLL = post_ll;
-   R.resultLNO = mse_fold;
+   R.gpfa       = model;
+   R.resultLL   = like;
+   R.resultLNO  = mse;
    
    figure(1)
    set(gcf, 'position', [100, 100, 900, 500])
    subplot(121)
    set(gcf, 'PaperUnits', 'centimeters');
    set(gcf, 'PaperPosition', [0 0 25 11]);   
-   plot(zDim, mse_fold./repmat(mse_fold(1,1),length(zDim),3), '-x'), hold on, grid on
+   plot(zDim, mse - mean(mse), '-x'), hold on, grid on
 
-   ylabel('MSE y_{real} and y_{pred}')
-   xlabel('Latent Dimension')
+   ylabel('MSE (centered)')
+   xlabel('Latent Dimension GPFA')
    text(10, 1, 'left/right train(test)')
    text(1,1.01,sprintf('%1.2e',mse_fold(1,1)))
    colors = lines(3);
@@ -281,9 +282,9 @@ for irat = 35 : length(files)
    %ylim([0.5, 1.1]) 
    
    subplot(122)  
-   plot(zDim, post_ll./repmat(abs(post_ll(1,1)),length(zDim),3), '-x'), hold on, grid on
+   plot(zDim, like - mean(like), '-x'), hold on, grid on
    text(1,-1.001,sprintf('%1.2e',abs(post_ll(1,1))))
-   ylabel('LogLikelihood test data')
+   ylabel('Posterir LogLike (centered)')
    xlabel('Latent Dimension')   
    
    
@@ -296,13 +297,146 @@ for irat = 35 : length(files)
    saveas(gcf,sprintf('%s_resultGPFA_bin(%d).png',roots{irat},D(1).T))
    close all
    %======================================================================%
-   %================       Training Validation           =================%
+   %================       Save Data                     =================%
    %======================================================================%
    
    %update data
-   save([roots{irat} '_CV.mat'], 'R');
+   save(sprintf('%s_CV_bin(%d).mat',roots{irat},D(1).T), 'R');
    
    clear post_ll mse_fold tmp* R D  
+   
+end
+
+%% Run PPCA and FA and GPFA, EID
+
+clc, clear all;
+cd /media/LENOVO/HAS/CODE/Wigner-Pattern
+
+basepath                = '/media/bigdata/';
+[files, animals, roots] = get_matFiles(basepath, '/*count*.mat');
+useSqrt                 = 1; % square root tranform?    
+zDim                    = [2:2:30]; %hidden space dimensions
+rat_curr                = '';
+num_dims                = numel(zDim);
+
+for irat = 11 : 10 :length(files)
+   
+   y_obj            = load(files{irat});
+   D                = y_obj.D; 
+   num_laps         = length(D);
+   num_cells        = size(D(1).y, 1);
+   fprintf('Processing animal %s\n', animals{irat})
+   
+   %get alternations to construct balanced folds (Righ/left)
+   cv_alternation = zeros(1, num_laps);
+   for ilap = 1 : num_laps
+       if strcmp(D(ilap).condition, 'left') || strcmp(D(ilap).condition, 'errorRight')
+            cv_alternation(ilap) = 1;      
+       end       
+   end
+   %Paramters of cross validation 3 folds
+   %save the folds equal for the same animal, for comparisons
+   if ~strcmp(rat_curr, animals{irat})
+       cv_mask         = false(1,num_laps);
+       cv_trials       = randperm(num_laps);
+       cv_fold_idx     = floor(linspace(1,num_laps, 4));  %three chunks
+       rat_curr        = animals{irat};
+   end
+   num_folds = length(cv_fold_idx)- 1;
+   
+   %======================================================================%
+   %================       Training Validation           =================%
+   %======================================================================%
+   for s = {'gpfa'}
+      eval(sprintf('mse_%s=zeros(1, num_dims);',s{1}))
+      eval(sprintf('like_%s= zeros(1, num_dims);',s{1})); 
+   end
+   parfor_progress(num_dims*num_folds);
+
+   for idim = 1 : num_dims
+       tic
+        for ifold = 1 : num_folds
+            parfor_progress(-1,sprintf('Bin %d,q=%d  ',D(1).T, zDim(idim)));
+            
+            gp_test_mask = cv_mask;
+            gp_test_mask(cv_trials(cv_fold_idx(ifold):...
+                             cv_fold_idx(ifold+1)-1)) = true;
+            gp_train_mask = ~gp_test_mask; 
+            
+            for s = {'gpfa'}
+                gp_test_data  = [D(gp_test_mask).y];
+                if ~strcmp(s{1},'gpfa')
+                    gp_train_data = [D(gp_train_mask).y];
+                    
+   
+                    params   = fastfa(gp_train_data,zDim(idim),'typ',s);
+
+                    % compute likelihood on test data FA
+                    [chugs, like_fold] = fastfa_estep(gp_test_data,params); 
+                    cvdata        = cosmoother_fa(gp_test_data,params);
+                    mse_fold      = sum(sum((cvdata-gp_test_data).^2));
+                    
+                else
+                    %training of the GPFA with already binned data (1)
+                    [gp_params, gpfa_traj] = gpfa_mod(D(gp_train_mask),zDim(idim),...
+                                                         'bin_width', 1);
+                    %Posterior of test data given the trained model
+                    [gp_traj, gp_ll]   = exactInferenceWithLL(D(gp_test_mask), gp_params,'getLL',1);
+
+                    like_fold = gp_ll;
+                    % orthogonalize the trajectories
+
+                    [gp_Xorth, gp_Corth]     = orthogonalize([gp_traj.xsm], gp_params.C);
+                    gp_traj                  = segmentByTrial(gp_traj, gp_Xorth, 'data');
+
+                    %Validation with LNO
+                    cv_gpfa = cosmoother_gpfa_viaOrth_fast(D(gp_test_mask),gp_params,zDim(idim));
+                    cv_gpfa_cell       = struct2cell(cv_gpfa);
+                    cvdata             = cell2mat(cv_gpfa_cell(end,:));
+                    
+                    mse_fold           = sum(sum((cvdata - gp_test_data).^2));
+                    
+                    
+                end
+                if idim == 1 && ifold == 1
+                    figure(200)
+                    stairs(gp_test_data(1,:)), hold on
+                end
+                if ifold == 1 && zDim(idim) == 10 
+                    figure(200)
+                    plot(cvdata(1,:))
+                    drawnow
+                end
+                
+                % add up the likelihood and LNO errors across folds
+                eval(sprintf('mse_%s(idim) = mse_%s(idim) + mse_fold;',s{1},s{1}))
+                eval(sprintf('like_%s(idim) = like_%s(idim) + like_fold;',s{1},s{1}));
+            end
+            
+        end
+   end
+   parfor_progress(0);
+   
+   figure(irat)
+   set(gcf, 'position', [100, 100, 900, 500])
+   subplot(1,2,1)
+   plot(zDim,mse_gpfa - mean(mse_gpfa),'-bx'),hold on
+   xlabel('Latent dimension with GPFA')
+   ylabel('LNO MSE (centered)')
+   set(gca, 'fontsize', 14)
+   subplot(1, 2, 2)
+   plot(zDim,like_gpfa - mean(like_gpfa),'-rx'),hold on 
+   xlabel('Latent dimension with GPFA')
+   ylabel('Posterior loglike (centered)')
+   set(gca, 'fontsize', 14)
+   
+   set(gcf,'NextPlot','add'); axes;
+   h = title(sprintf('%s bin(%d)',animals{irat},D(1).T));
+   set(gca,'Visible','off');
+   set(h,'Visible','on');
+   
+   drawnow
+   saveas(gcf,sprintf('%s_valGPFA_bin(%d).png',roots{irat},D(1).T))
    
 end
 
@@ -359,15 +493,19 @@ imagesc(mean(corX,3))
 %% Check covarince kernel
 
 Tdif         = repmat((1:D(1).T)', 1, D(1).T) - repmat(1:D(1).T, D(1).T, 1);
-figure(idx_hdv)
+figure(2)
 title(sprintf('GPs covariances, animal %s',animal))
-
+colors = jet(50);
 for idx_hdv = 1 : zDim
     subplot(2,5,idx_hdv)
     K            = (1 - gp_params.eps(idx_hdv)) * ...
                     exp(-gp_params.gamma(idx_hdv) / 2 * Tdif.^2) +...
                     gp_params.eps(idx_hdv) * eye(D(1).T);
-    imagesc(K)
+    for j = 1:10
+        X_sampled = mvnrnd(zeros(1, length(K)), K);      
+        plot(X_sampled, 'color', colors(j,:)), hold on
+    end
+    %imagesc(K)
 end
 
 %% SPWs

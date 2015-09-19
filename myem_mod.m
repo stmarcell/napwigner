@@ -79,7 +79,7 @@ function [estParams, seq, LL, iterTime] = myem_mod(currentParams, seq, varargin)
   
   % Loop once for each iteration of EM algorithm
   
-
+  h = [];
   for i = 1:emMaxIters
     
      
@@ -118,6 +118,45 @@ function [estParams, seq, LL, iterTime] = myem_mod(currentParams, seq, varargin)
 
     term = [sum_Pauto sum_xall; sum_xall' sum(T)]; % (xDim+1) x (xDim+1)
     Cd   = ([sum_yxtrans sum_yall]) / term;   % yDim x (xDim+1)
+    
+   %======================================================================%
+   %================       Added for visualization       =================%
+   %================       Ruben 22 sept 2015            =================%
+   %======================================================================%
+   if verbose
+       figure(1)
+        subplot(2,5,[1 2 6 7])    
+        [Xorth, Corth]     = orthogonalize([seq.xsm], currentParams.C);
+        surf(Corth)
+        zlabel('Projection weights (C)')
+        axis([0 xDim 0 yDim -1 1])
+        %Validation with LNO
+        subplot(2,5,[3 4])
+        y_est = Corth(40,:) * Xorth + currentParams.d(40);
+        stairs(Y(40,:)), hold on
+        ylabel('Y_{40}')
+        xlabel('Concatenated bins')
+        ylim([-10 28]), xlim([0 seq(1).T*N])
+        plot(repmat((1 : N - 1) * seq(1).T, 2, 1), ylim, 'color',[0.8 0.8 0.8])
+        plot(y_est,'r', 'linewidth', 2), hold off
+        %
+        subplot(2,5,[8 9])
+        if ~isempty(h)
+           set(h,'color',[0.8 0.8 0.8], 'linewidth', 0.5) 
+        end
+        ylim([-3 3])
+        ylabel('X_1')
+        xlabel('Concatenated bins')
+        plot(repmat((1 : N - 1) * seq(1).T, 2, 1), ylim, 'color',[0.6 0.6 0.8])
+        h = plot(Xsm(4,:), 'b', 'linewidth', 2); hold on;   
+        xlim([0 seq(1).T*N]), 
+        subplot(2,5,[5])
+        plot(LL(~isnan(LL)),'-x', 'linewidth', 2)
+        xlim([2 20])
+        ylabel('Posterior LogLike')
+        drawnow
+   end
+    %======================================================================%
     
     currentParams.C = Cd(:, 1:xDim);
     currentParams.d = Cd(:, end);
