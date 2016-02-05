@@ -15,13 +15,13 @@ if nargin>3; exVars = nargin - 3; end
 for j=1:max(clusters) %for each neuron  
    spk_per_neuron{j}  = spikes(clusters==j);
    for v = 1 : exVars
-      eval(['aux' num2str(v) '{j} = varargin{v+3}(clusters==j);']); 
+      eval(sprintf('aux%d{j} = varargin{v+3}(clusters==j);',v)); 
    end
    for k=1:length(laps)-1 % for each lap
         index = spk_per_neuron{j}>=laps(k) & spk_per_neuron{j}<laps(k+1);
         spk_per_lap{k,j} = spk_per_neuron{j}(index);
         for v = 1 : exVars
-            eval(['aux_lap' num2str(v) '{k,j} = aux' num2str(v) '{j}(index);']); 
+            eval(sprintf('aux_lap%d{k,j} = aux%d{j}(index);',v,v)); 
         end
    end
 end
@@ -30,7 +30,7 @@ varargout{1} = spk_per_neuron;
 varargout{2} = spk_per_lap;
 
 for v = 1 : exVars
-   varargout{2 + v} = eval(['aux' num2str(v)]);
-   varargout{2 + exVars + v} = eval(['aux_lap' num2str(v)]);
+   varargout{2 + v} = eval(sprintf('aux%d',v));
+   varargout{2 + exVars + v} = eval(sprintf('aux_lap%d',v));
 
 end

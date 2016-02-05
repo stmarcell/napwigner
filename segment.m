@@ -9,12 +9,12 @@ function [F,keep_neurons]=segment(D, bin_size, Fs, keep_neurons, name_var, maxTi
 %        maxTime: maximum segmenting time s 
 %
 %Ruben Pinzon@2015
-data = eval(['[D.' name_var ']']);
+data = [D.(name_var)];
 if length(keep_neurons)==1
     min_firing      = keep_neurons;
     firing_thr      = min_firing; % Minimum firing rate find which  neurons should be kept
-    m               = mean([data],2) * Fs;
-    keep_neurons    = m >= firing_thr;          
+    m               = mean(data,2) * Fs;
+    keep_neurons    = m >= firing_thr;
 else
     disp('Vector of neurons to remove provided')
     firing_thr      = NaN;
@@ -26,8 +26,9 @@ fprintf('%d neurons remained with firing rate above %2.2f Hz\n',...
 
 
 % Remove low firing rate neurons
+Temp=repmat(struct([]),length(D),1);
 for itrial = 1:length(D)
-    Temp(itrial).data = eval(['D(itrial).' name_var '(keep_neurons,:);']);
+    Temp(itrial).data = D(itrial).(name_var)(keep_neurons,:);
 end
 yDim            = sum(keep_neurons);
 useSqrt         = 1; % square root tranform for pre-processing?    
@@ -35,13 +36,13 @@ useSqrt         = 1; % square root tranform for pre-processing?
 
 bin_width       = ceil(bin_size * Fs); % bin size (Seconds * Fs) = samples
 
-%Extrat bins for one trial, since all the trials
+%Extract bins for one trial, since NOT all the trials
 %are of the same duration
 for ilap = 1 : length(Temp)
     seq         = [];
     T           = floor(size(Temp(ilap).data, 2) / bin_width);
     if maxTime ~= 0
-       T_requested = floor(maxTime * Fs /bin_width); 
+       T_requested = floor(maxTime * Fs / bin_width); 
        if T_requested > T
            disp('ERROR: Requested time larger than lenght of trial')
            return
@@ -66,7 +67,7 @@ for ilap = 1 : length(Temp)
     else
         F(ilap).type    = D(ilap).trialType;
     end
-    F(ilap).y       = seq.y;        
-    F(ilap).T       = T;    
+    F(ilap).y       = seq.y;
+    F(ilap).T       = T;
     
 end

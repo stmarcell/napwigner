@@ -10,7 +10,7 @@ color    = hsv(numLaps);
 
 sufix    = {'in', 'out'};
 for s = 1 : length(sufix)
-    sect = eval(sufix{s});
+    sect = sufix{s};
     if strcmp(sect,'mid_arm')
         int = 1;
     elseif strcmp(sect,'preturn')
@@ -37,7 +37,9 @@ end
 % Extract firing rates in the section given
 for lap = 1:numLaps  
     
-    idx_lap = [sum(D(lap).sections(sect_in,1)), sum(D(lap).sections(sect_out,2))];
+    % in some rare cases both left and right sections are visited
+    % but non-visited section have entering and leaving time "0"
+    idx_lap = [max(D(lap).sections(sect_in,1)), max(D(lap).sections(sect_out,2))];
     if int == 13
     %for wheel section extract spikes when the wheel is moving    
         wheelNonZero    = find(D(lap).wh_speed~=0);
@@ -46,12 +48,12 @@ for lap = 1:numLaps
             return
         end
         idx_lap         = [wheelNonZero(1), wheelNonZero(end)];
-        eval(['D(lap).' name '_wheelNonZero=wheelNonZero;'])
+        D(lap).([name '_wheelNonZero'])=wheelNonZero;
     end
     
     X_lap        = D(lap).X(idx_lap(1):idx_lap(2));
     Y_lap        = D(lap).Y(idx_lap(1):idx_lap(2));
-    acc_dst      = cumsum(sqrt((X_lap - X_lap(1)).^2 + (Y_lap - Y_lap(1)).^2));
+    acc_dst      = [0; cumsum(sqrt((X_lap(2:end) - X_lap(1:end-1)).^2 + (Y_lap(2:end) - Y_lap(1:end-1)).^2))];
     speed_lap    = D(lap).speed(idx_lap(1):idx_lap(2));
 
     t_lap        = idx_lap(2) - idx_lap(1) + 1;
@@ -81,11 +83,11 @@ for lap = 1:numLaps
     end              
 
     %Type of trial
-    %eval(['R(lap).' name '_firing=firing;'])
-    R(lap).trialId = D(lap).trialId;   
-    R(lap).type    = D(lap).type; 
-    eval(['R(lap).' name '_spike_train=spk_train;'])
-    eval(['R(lap).' name '_interval=idx_lap;'])
-    eval(['R(lap).' name '_speed=speed_lap;'])
+    %R(lap).([name '_firing'])      = firing;
+    R(lap).trialId                  = D(lap).trialId;   
+    R(lap).type                     = D(lap).type; 
+    R(lap).([name '_spike_train'])  = spk_train;
+    R(lap).([name '_interval'])     = idx_lap;
+    R(lap).([name '_speed'])        = speed_lap;
     
 end

@@ -8,7 +8,7 @@
 
 clc, close all; clear all;
 
-basepath        = '/media/bigdata/';
+basepath        = '~/hc-5/';
 [files, animals, roots]= get_matFiles(basepath);
 
 
@@ -24,17 +24,18 @@ Fs              = data.Par.SamplingFrequency;
 X               = data.Track.X;
 Y               = data.Track.Y;
 eeg             = data.Track.eeg;
-time            = linspace(0, length(eeg)/1250,length(eeg));
+time            = linspace(0, length(eeg)/Fs,length(eeg));
 speed           = data.Track.speed;
 wh_speed        = data.Laps.WhlSpeedCW;
 isIntern        = data.Clu.isIntern;
 numLaps         = length(events);
+%spikes per neuron, laps separated by [StartLaps SyncOff]
 [spk, spk_lap]  = get_spikes(clusters, data.Spike.res,laps);
 n_cells         = size(spk_lap,2);
 n_pyrs          = sum(isIntern==0);
 TrialType       = data.Laps.TrialType;
 Typetrial_tx    = {'left', 'right', 'errorLeft', 'errorRight'};
-clear data
+%clear data
 %section in the maze to analyze
 in              = 'mid_arm';
 out             = 'lat_arm';

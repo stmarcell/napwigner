@@ -35,11 +35,12 @@ color           = hsv(4);
 % Extract spks when the mouse is running 
 for lap = 1:numLaps  
 
-    
+    % note that the lap ends in seection 11 while the last ask might be in
+    % section 13 so max(events{lap}(:,2)) would be equally justified
     idx_lap      = [events{lap}(1,1), events{lap}(end,2)];
     X_lap        = X(idx_lap(1):idx_lap(2));
     Y_lap        = Y(idx_lap(1):idx_lap(2));
-    acc_dst      = cumsum(sqrt((X_lap - X_lap(1)).^2 + (Y_lap - Y_lap(1)).^2));
+    acc_dst      = [0; cumsum(sqrt((X_lap(2:end) - X_lap(1:end-1)).^2 + (Y_lap(2:end) - Y_lap(1:end-1)).^2))];
     speed_lap    = speed(idx_lap(1):idx_lap(2));
     wh_speed_lap = wh_speed(idx_lap(1):idx_lap(2));
 
@@ -53,6 +54,8 @@ for lap = 1:numLaps
             tmp              = zeros(1, t_lap); 
             cnt              = cnt + 1;
             
+            %this re-filtering as introduced because get_spikes only uses
+            %lap start times and idx_lap(:) might differ
             idx              = spk{lap,neu}>=idx_lap(1) & spk{lap,neu}<=idx_lap(end);
             %aligned to the start of the section            
             spikes_lap{cnt}      = spk{lap,neu}(idx) - idx_lap(1) + 1;
