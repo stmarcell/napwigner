@@ -6,18 +6,15 @@
 %Version 1.0 Ruben Pinzon@2015
 
 
-clc, close all; clear all;
+clc, close all; %clear all;
+run('gpfa4runSettings.m');
 
 basepath        = '~/hc-5/';
-[files, animals, roots]= get_matFiles(basepath);
+[files, animals, roots] = get_matFiles(basepath);
 
 
 %========================Paramteres and variables==========================
-animal          = 6;
-data            = load(files{animal});
-clusters        = data.Spike.totclu;
-laps            = data.Laps.StartLaps(data.Laps.StartLaps~=0); %@1250 Hz
-laps(end+1)     = data.Par.SyncOff;
+data            = load(files{settings.animal});
 mazesect        = data.Laps.MazeSection;
 events          = data.Par.MazeSectEnterLeft;
 Fs              = data.Par.SamplingFrequency;
@@ -29,40 +26,32 @@ speed           = data.Track.speed;
 wh_speed        = data.Laps.WhlSpeedCW;
 isIntern        = data.Clu.isIntern;
 numLaps         = length(events);
-%spikes per neuron, laps separated by [StartLaps SyncOff]
-[spk, spk_lap]  = get_spikes(clusters, data.Spike.res,laps);
-n_cells         = size(spk_lap,2);
+spk_clust       = get_spikes(data.Spike.totclu, data.Spike.res);
+n_cells         = length(isIntern);
 n_pyrs          = sum(isIntern==0);
-TrialType       = data.Laps.TrialType;
+TrialType       = data.Par.TrialType;
+BehavType       = data.Par.BehavType+1;
+clear data
+% String descriptions
 Typetrial_tx    = {'left', 'right', 'errorLeft', 'errorRight'};
-%clear data
-%section in the maze to analyze
-in              = 'mid_arm';
-out             = 'lat_arm';
-debug           = false;
-namevar         = 'run';
-%segmentation and filtering of silent neurons
-bin_size        = 0.04; %ms
-min_firing      = 1.0; %minimium firing rate
-filterTrails    = false; % filter trails with irregular speed/spike count?
-% GPFA trainign
-n_folds         = 3;
-zDim            = 5; %latent dimension
+Typebehav_tx    = {'first', 'regular', 'uncertain'};
+Typeside_tx     = {'left', 'right', 'right', 'left'};
+% GPFA training
 showpred        = false; %show predicted firing rate
-train_split      = true; %train GPFA on left/right separately?
-name_save_file  = '_trainedGPFA_run.mat';
+train_split     = true; %train GPFA on left/right separately?
+name_save_file  = 'trainedGPFA';
 test_lap        = 10;
-maxTime         = 0; %maximum segmentation time 0 if use all
+
 %%
 % ========================================================================%
 %==============   (1) Extract trials              ========================%
 %=========================================================================%
 
-D = extract_laps(Fs,spk_lap,speed,X,Y,events,isIntern, laps, TrialType,...
-                 wh_speed);
+D = extract_laps(Fs, spk_clust, ~isIntern, X, Y, speed, wh_speed, events, ...
+                 struct('in','all','out','all'), TrialType, BehavType);
 
 %show one lap for debug purposes 
-if debug
+if settings.debug
     figure(test_lap)
     raster(D(test_lap).spikes), hold on
     plot(90.*D(test_lap).speed./max(D(test_lap).speed),'k')
@@ -73,7 +62,9 @@ end
 %==============  (2)  Extract Running Sections    ========================%
 %=========================================================================%
 
-S = get_section(D, in, out, debug, namevar); %lap#1: sensor errors 
+%S = get_section(D, in, out, debug, namevar); %lap#1: sensor errors
+S = extract_laps(Fs, spk_clust, ~isIntern, X, Y, speed, wh_speed, events, ...
+                settings.section, TrialType, BehavType);
 
 % ========================================================================%
 %============== (3) Segment the spike vectors     ========================%
@@ -81,39 +72,49 @@ S = get_section(D, in, out, debug, namevar); %lap#1: sensor errors
 %load run model and keep the same neurons
 % run = load([roots{animal} '_branch2_results40ms.mat']);
 
-[R,keep_neurons]    = segment(S, bin_size, Fs, min_firing,...
-                              [namevar '_spike_train'], maxTime);
+[R,keep_neurons]       = segment(S, 'spike_train', settings.bin_size, Fs, ...
+                                 1, settings.min_firing, settings.maxTime);
 %%
 % ========================================================================%
 %============== (4)         Train GPFA            ========================%
 %=========================================================================%
-M                 = trainGPFA(R, zDim, showpred, n_folds);
+laps_all               = select_laps(BehavType, TrialType, 'run');
+M                      = trainGPFA(R, laps_all, settings.zDim, showpred, ...
+                                   settings.n_folds);
 
 if train_split
-    [R_left, R_right] = split_trails(R);
-    if filterTrails
-        R_left            = filter_laps(R_left);
-        R_right           = filter_laps(R_right,'bins');
+    %[R_left, R_right]  = split_trails(R);
+    laps_left          = select_laps(BehavType, TrialType, 'run', 1);
+    laps_right         = select_laps(BehavType, TrialType, 'run', 2);
+    
+    if settings.filterTrails
+        R_left         = filter_laps(R_left);
+        R_right        = filter_laps(R_right,'bins');
     end
 
-    M_left            = trainGPFA(R_left, zDim, showpred, n_folds);
-    M_right           = trainGPFA(R_right, zDim, showpred, n_folds);
+    M_left             = trainGPFA(R, laps_left, settings.zDim, showpred, ...
+                                   settings.n_folds);
+    M_right            = trainGPFA(R, laps_right, settings.zDim, showpred, ...
+                                   settings.n_folds);
 end
 
 %%
 % ========================================================================%
-%============== (5)    Show Neural Trajectories   ========================%
+%============== (5)    Save data                  ========================%
+%=========================================================================%
+fprintf('Will save at %s\n',[roots{settings.animal} name_save_file])
+save([roots{settings.animal} name_save_file '_' settings.namevar '.mat'], ...
+     'M', 'M_left', 'M_right', 'R', 'keep_neurons')
+
+%%
+% ========================================================================%
+%============== (6)    Show Neural Trajectories   ========================%
 %=========================================================================%
 
 colors = cgergo.cExpon([2 3 1], :);
 labels = [R.type];
 Xorth = show_latent({M},R,colors, labels);
 
-%======================================================================== %
-%============== (6)    Save data                  ========================%
-%=========================================================================%
-fprintf('Will save at %s\n',[roots{animal} name_save_file])
-save([roots{animal} name_save_file],'M','M_left','M_right','R', 'keep_neurons')
 %%
 %=========================================================================%
 %=========(7) Compare mean spike counts              =====================%

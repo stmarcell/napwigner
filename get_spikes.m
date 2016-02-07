@@ -1,36 +1,13 @@
-function varargout = get_spikes(varargin)
+function [spk_per_neuron,varargout] = get_spikes(clusters, spikes, varargin)
 % GET_SPIKES extract variables per neuron per lap
 %
-%   [spk, spk_lap] = get_spikes(clusters, Spike, laps)
-%   If more inputs ar provided, then
-%   [spk, spk_lap, X, X_lap] = get_spikes(clusters, Spike, laps, X)
+%   [spk, spk_lap] = get_spikes(clusters, spike)
 
-clusters = varargin{1};
-spikes = varargin{2};
-laps = varargin{3};
-
-exVars = 0;
-if nargin>3; exVars = nargin - 3; end
+nXtra = nargin - 2;
 
 for j=1:max(clusters) %for each neuron  
-   spk_per_neuron{j}  = spikes(clusters==j);
-   for v = 1 : exVars
-      eval(sprintf('aux%d{j} = varargin{v+3}(clusters==j);',v)); 
-   end
-   for k=1:length(laps)-1 % for each lap
-        index = spk_per_neuron{j}>=laps(k) & spk_per_neuron{j}<laps(k+1);
-        spk_per_lap{k,j} = spk_per_neuron{j}(index);
-        for v = 1 : exVars
-            eval(sprintf('aux_lap%d{k,j} = aux%d{j}(index);',v,v)); 
-        end
-   end
-end
-
-varargout{1} = spk_per_neuron;
-varargout{2} = spk_per_lap;
-
-for v = 1 : exVars
-   varargout{2 + v} = eval(sprintf('aux%d',v));
-   varargout{2 + exVars + v} = eval(sprintf('aux_lap%d',v));
-
+    spk_per_neuron{j} = spikes(clusters==j);
+    for v = 1 : nXtra
+        varargout{v}{j} = varargin{v}(clusters==j);
+    end
 end

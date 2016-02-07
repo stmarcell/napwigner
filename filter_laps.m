@@ -1,5 +1,5 @@
 function D = filter_laps(D,varargin)
-%Filter the laps in nteh struct D with firing rate count below 1 s.d of
+%Filter the laps in thel struct D with firing rate count below 1 s.d of
 %       the mean of all the laps.
 %
 %Ruben Pinzon @2015

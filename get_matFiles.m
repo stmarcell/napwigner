@@ -13,12 +13,12 @@ basepath = varargin{1};
 if nargin == 1
    pattern  = '/*BehavElectrData.mat';
    sufix    = 'i01*';
-elseif nargin ==2
-   sufix    = 'i01*'; 
-   pattern = varargin{2}; 
+elseif nargin == 2
+   sufix    = 'i01*';
+   pattern  = varargin{2};
 else
-   sufix    = varargin{3}; 
-   pattern  = varargin{2}; 
+   sufix    = varargin{3};
+   pattern  = varargin{2};
 end
 
 fprintf('Searching files with pattern %s\n', [basepath sufix pattern])
@@ -33,6 +33,7 @@ for ifolder = 1 : length(animals)
         files{end + 1} = [basepath name '/' D(ifil).name];
         names{end + 1} = name;
         roots{end + 1} = [basepath name '/' name];
+        disp(sprintf('%d: %s', length(files), files{end}));
     end
     
 end 

@@ -1,17 +1,25 @@
-function M = trainGPFA(D, zDim, showpred, folds)
-%TRAINGPFA trains an cross validates a gpfa model with the data in D, using 3 folds
+function M = trainGPFA(D, select_laps, zDim, showpred, folds)
+%TRAINGPFA trains an cross validates a gpfa model with the data in D, using given folds
 %           fields required in D: y: spike trains
-%ruben pinzon 2015
+%           select_laps: the integer IDs of the laps to be included
+%           zDim: number of latent dimensions
+%           showpred: whether to use graphical debugging
+%           folds: the number of folds
+%
+% Author:
+% Ruben Pinzon 2015
+% Last revision by:
+% Marcell Stippinger, 2016
 
-% folds           = 3;
+lap_mask        = false(1,length(D)); % for cross validation
 
-mask            = false(1,length(D)); % for cross validation
-cv_trials       = randperm(length(D));
-fold_indx       = floor(linspace(1,length(D)+1, folds+1));
+cv_mask         = false(1,length(select_laps));
+cv_trials       = randperm(length(select_laps));
+fold_indx       = floor(linspace(1,length(select_laps)+1, folds+1));
 
 mse             = zeros(1,folds);
 like            = zeros(1,folds);
-like_tr         = cell(1,folds);
+like_tr         = cell(1, folds);
 paramsGPFA      = cell(1, folds);
 test_trials     = cell(1, folds);
 train_trials    = cell(1, folds);
@@ -20,16 +28,27 @@ for ifold = 1 : folds  % two-fold cross-validation
     % prepare masks:
     % test_mask isolates a single fold, train_mask takes the rest
     
-    test_mask       = mask;
-    test_mask(cv_trials(fold_indx(ifold):fold_indx(ifold+1)-1)) = true;
-    train_mask = ~test_mask;
-    train_data = D(train_mask);
-    test_data  = D(test_mask);
+    subset      = cv_trials(fold_indx(ifold):fold_indx(ifold+1)-1);
+    submask     = cv_mask;
+    submask(subset) = true;
+    
+    test_mask   = lap_mask;
+    test_mask(select_laps(submask)) = true;
+    train_mask  = lap_mask;
+    train_mask(select_laps(~submask)) = true;
+    train_data  = D(train_mask);
+    test_data   = D(test_mask);
+    
+    select_laps
+    submask
+    train_mask
+    test_mask
     
     test_trials{ifold}  = [test_data.trialId];
     train_trials{ifold} = [train_data.trialId];
     
     fprintf('training with trials %s\n',sprintf('%d, ',train_trials{ifold}))
+    fprintf('reserving trials %s for testing\n',sprintf('%d, ',test_trials{ifold}))
     %training of the GPFA
     [params, gpfa_traj, ll_tr] = gpfa_mod(train_data,zDim);
 
@@ -38,7 +57,7 @@ for ifold = 1 : folds  % two-fold cross-validation
     % orthogonalize the trajectories4
     [Xorth, Corth] = orthogonalize([traj.xsm], params.C);
     traj = segmentByTrial(traj, Xorth, 'data');
-% 
+
     %Validation with LNO
     cv_gpfa_cell = struct2cell(cosmoother_gpfa_viaOrth_fast...
                               (test_data,params,zDim));
