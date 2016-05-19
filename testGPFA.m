@@ -1,5 +1,11 @@
+% Test case for three latent factors plus known stimulus terms
+% AE 2012-10-19
+
 % create toy example
+%rng(1)
 [grd, Y, X, S] = GPFA.toyExample();
+% % [grd, Y, X, S] = GPFA.toyExampleOri('gauss');
+% % [grd, Y, X, S] = GPFA.toyExampleOri('poisson');
 [grd, X] = grd.normFactors(X);
 
 % fit model
@@ -8,9 +14,6 @@ model = model.fit(Y, grd.p, 'hist');
 % model = model.fit(Y, grd.p, S);
 [model, Xest] = model.normFactors(Y);
 
-figure()
-[pc,score,latent,tsquare] = princomp(YY(:,:,1));
-plot(pc(:,1),'x')
 %% diagnostic plots
 cc = model.C' * grd.C;
 [~, ndx] = max(abs(cc));
@@ -24,7 +27,7 @@ for i = 1 : model.p
     plot(repmat((1 : N - 1) * model.T, 2, 1), ylim, 'k')
     ylabel(sprintf('Factor %d', i))
     xlabel('Time')
-    xlim([0 N * model.T])
+    xlim([0 100])
 end
 
 for i = 1 : model.p
@@ -45,3 +48,4 @@ plot(grd.D(:), model.D(:), '.k')
 axis tight
 xlabel('Stim term: ground truth')
 ylabel('Stim term: model fit')
+shg

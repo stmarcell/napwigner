@@ -1,31 +1,17 @@
-function varargout = get_spikes(varargin)
+function [spk_time_per_neuron,varargout] = get_spikes(clusters, spike_time, varargin)
+% GET_SPIKES extract variables per neuron
+%
+%   [spk_time_per_neuron, ...] = get_spikes(clusters, spike_time, ...)
+%
+%   NOTE: indexing errors may occur if the neuron with the largest ID does
+%   not fire
 
-clusters = varargin{1};
-spikes = varargin{2};
-laps = varargin{3};
+nXtra = nargin - 2;
 
-exVars = 0;
-if nargin>3; exVars = nargin - 3; end
-
+spk_time_per_neuron = cell(1,max(clusters));
 for j=1:max(clusters) %for each neuron  
-   spk_per_neuron{j}  = spikes(clusters==j);
-   for v = 1 : exVars
-      eval(['aux' num2str(v) '{j} = varargin{v+3}(clusters==j);']); 
-   end
-   for k=1:length(laps)-1
-        index = spk_per_neuron{j}>=laps(k) & spk_per_neuron{j}<laps(k+1);
-        spk_per_lap{k,j} = spk_per_neuron{j}(index);
-        for v = 1 : exVars
-            eval(['aux_lap' num2str(v) '{k,j} = aux' num2str(v) '{j}(index);']); 
-        end
-   end
-end
-
-varargout{1} = spk_per_neuron;
-varargout{2} = spk_per_lap;
-
-for v = 1 : exVars
-   varargout{2 + v} = eval(['aux' num2str(v)]);
-   varargout{2 + exVars + v} = eval(['aux_lap' num2str(v)]);
-
+    spk_time_per_neuron{j} = spike_time(clusters==j);
+    for v = 1 : nXtra
+        varargout{v}{j} = varargin{v}(clusters==j);
+    end
 end

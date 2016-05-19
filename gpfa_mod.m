@@ -1,5 +1,5 @@
-function [gpfa_params, gpfa_traj, LL_t, LL, diffC] = gpfa_mod(D,dims,varargin)
-% GPFA_ENGINEDH A modified GPFA_ENGINE for the DataHigh program
+function [gpfa_params, gpfa_traj, LL] = gpfa_mod(D,dims,varargin)
+% GPFA_MOD A modified version of GPFA_ENGINE for the DataHigh program
 %
 %  Inputs:
 %   D -- struct of trajectories, make sure it conforms to gpfa's format
@@ -7,7 +7,8 @@ function [gpfa_params, gpfa_traj, LL_t, LL, diffC] = gpfa_mod(D,dims,varargin)
 %   emMaxIters (optional) --- number of iterations GPFA will go to
 %   wb (optional) --- updates waitbar
 %   binWidth (optional, default:20) --- if you want to change binWidth
-%  Copyright Benjamin Cowley, Matthew Kaufman, Zachary Butler, Byron Yu, John Cunningham, 2012-2013
+%  Copyright Benjamin Cowley, Matthew Kaufman, Zachary Butler, Byron Yu,
+%  John Cunningham, 2012-2013
 
 % ---GNU General Public License Copyright---
 % This file is a modified version of gpfa_engineHD.m inside DataHigh.
@@ -19,13 +20,13 @@ function [gpfa_params, gpfa_traj, LL_t, LL, diffC] = gpfa_mod(D,dims,varargin)
 % 
 
 startup_gpfa;  % run the script to set up MEX environment
-emMaxIters = 200;  % shown to work for most cases
-bin_width = 25; % 20ms at 1250 Hz in samples
-extra_opts = assignopts(who,varargin);
+emMaxIters      = 200;  % shown to work for most cases
+bin_size_ms     = 25; % 20ms at 1250 Hz in samples
+extra_opts      = assignopts(who,varargin);
 
 % Set maxIters option
 if nargin < 3
-    emMaxIters = 500;
+    emMaxIters = 200;
 end
 gpfa_params     = [];
 gpfa_traj       = [];
@@ -41,8 +42,8 @@ startEps      = 1e-3;
 % ==================================
 startParams.covType = 'rbf';
 % GP timescale
-% Assume binWidth is the time step size.
-startParams.gamma = (bin_width / startTau)^2 * ones(1, dims);
+% Assume binWidth is the time step size. tau = bin_size_ms/sqrt(gamma)
+startParams.gamma = (bin_size_ms / startTau)^2 * ones(1, dims);
 % GP noise variance
 startParams.eps   = startEps * ones(1, dims);
 
@@ -50,11 +51,36 @@ startParams.eps   = startEps * ones(1, dims);
 % Initialize observation model parameters
 % ========================================
 yAll             = [D.y];
-[faParams, faLL] = fastfa(yAll, dims);
 
-startParams.d = mean(yAll, 2);
-startParams.C = faParams.L;
-startParams.R = diag(faParams.Ph);
+%if there is a sient neuron, then add a single spike to avoid ind.
+%matrix
+silentCells = find(sum(yAll,2)==0);
+if ~isempty(silentCells)
+   fprintf('%d silent neurons found [%s]. Adding a spike at random position\n',...
+           length(silentCells), sprintf('%d, ',silentCells));
+   yAll(silentCells,cumsum([D.T])) = 5;
+end
+
+try
+    [faParams, faLL] = fastfa(yAll, dims);
+    startParams.d = mean(yAll, 2);
+    startParams.C = faParams.L;
+    startParams.R = diag(faParams.Ph);
+catch    
+    d  = mean(yAll, 2);
+    Y0 = yAll - repmat(d, 1, size(yAll,2));
+    Q = cov(Y0');
+    [C, Lambda] = eigs(Q, dims);
+    fprintf('Initializing GPFA parameters with PCA\n');
+    R = diag(diag(Q - C * Lambda * C'));
+    
+    startParams.d = d;
+    startParams.C = C;
+    startParams.R = R;
+    disp('Succeded');
+end
+
+
 
 % Define parameter constraints
 startParams.notes.learnKernelParams = true;
@@ -68,14 +94,14 @@ currentParams = startParams;
   % =====================
 
 
-  [gpfa_params, D, LL_t,iterTime] =... 
+  [gpfa_params, D, LL] =... 
     myem_mod(currentParams, D,'emMaxIters',emMaxIters);
       
   if(nargout > 1)
     % Extract orthonormalized neural trajectories for original, unsegmented trials
     % using learned parameters
 
-    [gpfa_traj, LL] = exactInferenceWithLL(D, gpfa_params,'getLL',1);
+    [gpfa_traj, LL_last] = exactInferenceWithLL(D, gpfa_params,'getLL',1);
 
     
     % orthogonalize the trajectories
@@ -83,8 +109,6 @@ currentParams = startParams;
     gpfa_traj = segmentByTrial(gpfa_traj, Xorth, 'data');
     gpfa_traj = rmfield(gpfa_traj, {'Vsm', 'VsmGP', 'xsm'});
     gpfa_params.Corth = Corth;
-    
-    diffC = currentParams.C - gpfa_params.C;
   end
   
 
